@@ -93,10 +93,12 @@ def detectar(con: duckdb.DuckDBPyConnection, tabela: str, coluna: str, filtro: s
                count(*) FILTER (inteiro OR milhar),
                count(*) FILTER (n <> v),
                count(*) FILTER ({casa("v", "0[0-9]+")}),
-               count(DISTINCT lower(v))
+               count(DISTINCT lower(v)),
+               count(*) FILTER (regexp_matches(v, '^[0-9]{{1,4}}[-/.][0-9]{{1,2}}[-/.][0-9]{{1,4}}'))
         FROM marcados
     """).fetchone()
-    total, inteiros, moedas, br, us, percentuais, numericos, sem_casas, com_unidade, com_zero, distintos = linha
+    (total, inteiros, moedas, br, us, percentuais, numericos, sem_casas, com_unidade, com_zero, distintos,
+     forma_de_data) = linha
     if not total:
         return TipoDetectado("texto")
 
@@ -116,7 +118,8 @@ def detectar(con: duckdb.DuckDBPyConnection, tabela: str, coluna: str, filtro: s
             return TipoDetectado("inteiro", misto=escritas > 1)
         return TipoDetectado("decimal", milhar_ponto=milhar_ponto, misto=escritas > 1)
 
-    formatos = _formatos_de_data(con, tabela, v, filtro, total)
+    # Testar 12 formatos de data custa caro: só vale quando o texto tem forma de data.
+    formatos = _formatos_de_data(con, tabela, v, filtro, total) if forma_de_data / total >= FRACAO_MINIMA else []
     if formatos:
         return TipoDetectado("data", formatos=formatos, misto=len(formatos) > 1)
 

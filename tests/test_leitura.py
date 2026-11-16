@@ -10,6 +10,7 @@ from engine.consultas import grao_automatico, serie
 from engine.leitura import ArquivoInvalido, ler
 from engine.normalizacao import aplicar, sugerir
 from engine.perfil import perfilar_tabela
+from engine.sql import colunas_de
 
 
 def leia(caminho, **opcoes):
@@ -76,7 +77,8 @@ def test_excel_com_titulo_acima_do_cabecalho(tmp_path):
     arquivo = tmp_path / "relatorio.xlsx"
     livro.save(arquivo)
     con, leitura = leia(arquivo)
-    assert [linha[0] for linha in con.execute("DESCRIBE bruta").fetchall()] == ["mes", "receita", "custo"]
+    assert [nome for nome, _ in colunas_de(con, "bruta")] == ["mes", "receita", "custo"]
+    assert con.execute("SELECT __linha, mes FROM bruta").fetchall() == [(1, "janeiro")]
     assert leitura.linhas == 1 and "Pulei 2 linhas" in leitura.avisos[0]
 
 

@@ -25,9 +25,20 @@ def literal(valor: str) -> str:
 LISTA_VAZIOS = ", ".join(literal(v) for v in sorted(VAZIOS_DISFARCADOS))
 
 
-def colunas_de(con: duckdb.DuckDBPyConnection, tabela: str) -> list[tuple[str, str]]:
-    """Lista de (nome, tipo) da tabela, na ordem do arquivo."""
-    return [(linha[0], linha[1]) for linha in con.execute(f"DESCRIBE {ident(tabela)}").fetchall()]
+# Número de cada linha no arquivo original. Edições e remoções apontam para ele,
+# então ele acompanha a linha por toda a receita.
+LINHA = "__linha"
+
+
+def eh_interna(nome: str) -> bool:
+    """Colunas do próprio hub começam com "__" e ficam fora de perfil, análises e exportação."""
+    return nome.startswith("__")
+
+
+def colunas_de(con: duckdb.DuckDBPyConnection, tabela: str, internas: bool = False) -> list[tuple[str, str]]:
+    """Lista de (nome, tipo) da tabela, na ordem do arquivo. Sem as colunas internas, salvo se pedidas."""
+    todas = [(linha[0], linha[1]) for linha in con.execute(f"DESCRIBE {ident(tabela)}").fetchall()]
+    return todas if internas else [(nome, tipo) for nome, tipo in todas if not eh_interna(nome)]
 
 
 def eh_nulo(nome: str, tipo: str) -> str:

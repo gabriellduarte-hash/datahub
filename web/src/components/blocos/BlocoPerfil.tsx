@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Janela } from "@/components/Janela";
 import { fmtInteiro } from "@/lib/formato";
-import type { Estado, Papel, Perfil, PerfilColuna } from "@/lib/tipos";
+import type { Papel, Perfil, PerfilColuna, Tabela } from "@/lib/tipos";
 
 const PAPEIS: { valor: Papel; nome: string }[] = [
   { valor: "metrica", nome: "métrica" },
@@ -38,15 +38,15 @@ function BarraVazios({ fracao }: { fracao: number }) {
 }
 
 type Props = {
-  estado: Estado;
+  tabela: Tabela;
   ocupado: boolean;
   aoTrocarPapel: (coluna: string, papel: Papel) => void;
 };
 
-export function BlocoPerfil({ estado, ocupado, aoTrocarPapel }: Props) {
-  const temLimpo = Boolean(estado.perfil_limpo);
+export function BlocoPerfil({ tabela, ocupado, aoTrocarPapel }: Props) {
+  const temLimpo = Boolean(tabela.perfil_limpo);
   const [vendo, setVendo] = useState<"antes" | "depois">(temLimpo ? "depois" : "antes");
-  const perfil = (vendo === "depois" && estado.perfil_limpo ? estado.perfil_limpo : estado.perfil) as Perfil;
+  const perfil = (vendo === "depois" && tabela.perfil_limpo ? tabela.perfil_limpo : tabela.perfil) as Perfil;
   const validas = perfil.linhas - perfil.linhas_vazias;
   const comProblema = perfil.colunas.filter((c) => situacoes(c).length).length;
 
@@ -96,7 +96,7 @@ export function BlocoPerfil({ estado, ocupado, aoTrocarPapel }: Props) {
                       aria-label={`Papel de ${coluna.nome}`}
                       className="campo"
                       disabled={ocupado}
-                      value={estado.papeis[coluna.nome] ?? coluna.papel}
+                      value={tabela.papeis[coluna.nome] ?? coluna.papel}
                       onChange={(evento) => aoTrocarPapel(coluna.nome, evento.target.value as Papel)}
                     >
                       {PAPEIS.map((papel) => <option key={papel.valor} value={papel.valor}>{papel.nome}</option>)}

@@ -51,17 +51,24 @@ def _lista(estados: dict) -> list[dict]:
 
 
 def abrir(con: duckdb.DuckDBPyConnection, caminho: Path, limites: Limites = LOCAL,
-          aba: str | None = None, nome: str | None = None) -> dict:
+          aba: str | None = None, nome: str | None = None, tabela: str = "bruta") -> dict:
     """Blocos 1 a 3: lê o arquivo, faz o perfil e sugere a normalização."""
     estados = {}
-    leitura = _rodar("arquivo", lambda: ler(con, caminho, limites, aba, nome=nome), estados)
-    perfil = _rodar("perfil", lambda: perfilar_tabela(con, "bruta", limites), estados)
+    leitura = _rodar("arquivo", lambda: ler(con, caminho, limites, aba, tabela=tabela, nome=nome), estados)
+    return {**triar(con, tabela, limites, estados), "arquivo": asdict(leitura)}
+
+
+def triar(con: duckdb.DuckDBPyConnection, tabela: str, limites: Limites = LOCAL, estados: dict | None = None) -> dict:
+    """Blocos 2 e 3 sobre uma tabela que já está no banco (um arquivo lido, uma consulta salva)."""
+    estados = {} if estados is None else estados
+    if "arquivo" not in estados:
+        estados["arquivo"] = EstadoBloco("arquivo", "ok")
+    perfil = _rodar("perfil", lambda: perfilar_tabela(con, tabela, limites), estados)
     sugestoes = []
     if perfil:
-        sugestoes = _rodar("normalizacao", lambda: normalizacao.sugerir(con, "bruta", perfil, limites), estados) or []
+        sugestoes = _rodar("normalizacao", lambda: normalizacao.sugerir(con, tabela, perfil, limites), estados) or []
     return {
         "blocos": _lista(estados),
-        "arquivo": asdict(leitura),
         "perfil": asdict(perfil) if perfil else None,
         "sugestoes": [asdict(s) for s in sugestoes],
     }
@@ -86,16 +93,30 @@ def reanalisar(con: duckdb.DuckDBPyConnection, receita: list[dict], relatorio: d
     return _analisar(con, receita, _relatorio_de(relatorio), papeis, limites, _estados_de(estados_anteriores))
 
 
-def _analisar(con, receita, relatorio, papeis, limites, estados) -> dict:
-    unidades = normalizacao.unidades_da_receita(receita)
-    derivadas = normalizacao.colunas_derivadas(receita)
-    perfil = perfilar_tabela(con, "limpa", limites)
-    aplicar_papeis(perfil, papeis)
+def _analisar(con, receita, relatorio, papeis, limites, estados, tabela: str = "limpa") -> dict:
+    return analisar(con, tabela, normalizacao.unidades_da_receita(receita), normalizacao.colunas_derivadas(receita),
+                    relatorio, papeis, limites, estados)
 
-    lista_graficos = _rodar("graficos", lambda: graficos.sugerir(con, "limpa", perfil, unidades, limites, derivadas), estados)
+
+def analisar(con: duckdb.DuckDBPyConnection, tabela: str, unidades: dict[str, str], derivadas: dict[str, set[str]],
+             relatorio: Relatorio | None, papeis: dict[str, str] | None, limites: Limites = LOCAL,
+             estados: dict | None = None, so_media: set[str] | None = None) -> dict:
+    """Blocos 4 e 5 sobre a base de análise: uma tabela ou uma visão que junta várias.
+
+    `so_media` são colunas emprestadas de outra tabela numa visão: o limite do
+    cliente repete em cada pedido dele, e somar contaria o mesmo limite várias vezes.
+    """
+    estados = {} if estados is None else estados
+    perfil = perfilar_tabela(con, tabela, limites)
+    aplicar_papeis(perfil, papeis)
+    for coluna in perfil.colunas:
+        if coluna.nome in (so_media or set()) and coluna.agregacao == "soma":
+            coluna.agregacao = "media"
+
+    lista_graficos = _rodar("graficos", lambda: graficos.sugerir(con, tabela, perfil, unidades, limites, derivadas), estados)
     resultado_insights = _rodar(
         "insights",
-        lambda: insights.gerar(con, "limpa", perfil, unidades, limites, relatorio, derivadas),
+        lambda: insights.gerar(con, tabela, perfil, unidades, limites, relatorio, derivadas),
         estados,
     )
     return {
@@ -126,6 +147,10 @@ def aplicar_papeis(perfil: Perfil, papeis: dict[str, str] | None) -> None:
 
 def _estados_de(lista: list[dict] | None) -> dict:
     return {item["bloco"]: EstadoBloco(**item) for item in lista or [] if item["status"] != "pendente"}
+
+
+def relatorio_de(dados: dict) -> Relatorio:
+    return _relatorio_de(dados)
 
 
 def _relatorio_de(dados: dict) -> Relatorio:

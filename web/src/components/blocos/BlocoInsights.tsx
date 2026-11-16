@@ -1,6 +1,6 @@
 import { Janela } from "@/components/Janela";
 import { fmtTempo } from "@/lib/formato";
-import type { Estado, Insight } from "@/lib/tipos";
+import type { Analise, Insight } from "@/lib/tipos";
 
 const NOMES: Record<string, string> = {
   variacao_periodo: "Variação no período",
@@ -15,7 +15,7 @@ const NOMES: Record<string, string> = {
   qualidade: "Qualidade dos dados",
 };
 
-function Nota({ insight }: { insight: Insight }) {
+export function Nota({ insight }: { insight: Insight }) {
   return (
     <Janela titulo={insight.titulo} nivel={3}>
       <p className="insight-texto">{insight.texto}</p>
@@ -34,10 +34,13 @@ function Nota({ insight }: { insight: Insight }) {
   );
 }
 
-export function BlocoInsights({ estado }: { estado: Estado }) {
-  const resultado = estado.insights;
+export function PainelInsights({ analise }: { analise: Analise | null }) {
+  const resultado = analise?.insights;
+  if (!analise) {
+    return <Janela titulo="Insights"><p className="texto-suave">Os insights aparecem quando há uma base de análise.</p></Janela>;
+  }
   if (!resultado) {
-    return <Janela titulo="Insights"><p>O bloco de insights não rodou. Veja o erro na trilha ao lado.</p></Janela>;
+    return <Janela titulo="Insights"><p>O bloco de insights não rodou. Reanalise para tentar de novo.</p></Janela>;
   }
 
   return (

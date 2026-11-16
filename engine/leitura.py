@@ -16,7 +16,7 @@ import duckdb
 from openpyxl import load_workbook
 
 from engine.limites import LOCAL, LimiteExcedido, Limites
-from engine.sql import ident, literal
+from engine.sql import LINHA, colunas_de, ident, literal
 
 EXTENSOES_CSV = {".csv", ".tsv", ".txt"}
 LINHAS_BUSCA_CABECALHO = 20
@@ -258,9 +258,16 @@ def _detectar_codificacao(caminho: Path) -> str:
 
 
 def _dimensoes(con, tabela: str) -> tuple[int, int]:
+    """Numera as linhas e devolve (linhas, colunas). Toda leitura termina aqui."""
+    _numerar(con, tabela)
     linhas = con.execute(f"SELECT count(*) FROM {ident(tabela)}").fetchone()[0]
-    colunas = len(con.execute(f"DESCRIBE {ident(tabela)}").fetchall())
-    return linhas, colunas
+    return linhas, len(colunas_de(con, tabela))
+
+
+def _numerar(con, tabela: str) -> None:
+    """A linha 1 do arquivo vira __linha = 1. O rowid segue a ordem em que as linhas entraram."""
+    t = ident(tabela)
+    con.execute(f"CREATE OR REPLACE TABLE {t} AS SELECT rowid + 1 AS {ident(LINHA)}, * FROM {t}")
 
 
 def _mensagem(erro: duckdb.Error) -> str:

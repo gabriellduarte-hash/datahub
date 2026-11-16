@@ -113,6 +113,12 @@ class Contexto:
 CATALOGO = []
 
 
+def _vinculadas(ctx, a: str, b: str) -> bool:
+    """Uma coluna saiu da outra (fórmula), ou as duas vieram da mesma tabela
+    emprestada numa visão. A relação entre elas é cadastro, não descoberta."""
+    return b in ctx.derivadas.get(a, set()) or a in ctx.derivadas.get(b, set())
+
+
 def analisador(nome: str, precisa=None):
     """Registra um analisador. `precisa(ctx)` devolve o motivo para pular, se houver."""
     def registrar(funcao):
@@ -504,6 +510,8 @@ def concentracao(ctx):
         yield from _concentracao_de_linhas(ctx)
     for metrica in somaveis:
         for categoria in ctx.categorias[:3]:
+            if _vinculadas(ctx, categoria.nome, metrica.nome):
+                continue
             linhas = ranking(ctx.con, ctx.tabela, categoria.nome, "soma", metrica.nome)
             grupos = len(linhas)
             total = sum(valor for _, valor, _ in linhas)
@@ -617,6 +625,8 @@ def diferenca_entre_grupos(ctx):
 
         melhor = None
         for categoria, linhas in tabela.items():
+            if _vinculadas(ctx, categoria, metrica.nome):
+                continue
             validas = [(nome, float(d[f"mediana{j}"]), d[f"n{j}"]) for nome, d in linhas if d[f"n{j}"] >= minimo]
             # Um grupo em que todos têm o mesmo valor ("Not rated" sempre com nota 0)
             # é regra de cadastro: a categoria inteira fica de fora.
@@ -728,7 +738,7 @@ def taxa_por_grupo(ctx):
     particoes = set()
     for i, (nome, sim) in enumerate(sims.items()):
         for grupo, linhas in tabela.items():
-            if grupo == nome:
+            if grupo == nome or _vinculadas(ctx, grupo, nome):
                 continue
             # Dois sim/não: conta uma vez, com a taxa da coluna que parece ser a pergunta
             # (ou da que vem depois no arquivo).
@@ -804,6 +814,8 @@ def metrica_por_indicador(ctx):
         if set(lados) != {0, 1}:
             continue
         for j, metrica in enumerate(medidas):
+            if _vinculadas(ctx, nome, metrica.nome):
+                continue
             geral, mad = gerais[2 * j], gerais[2 * j + 1]
             m1, n1, constante1 = lados[1][3 * j:3 * j + 3]
             m0, n0, constante0 = lados[0][3 * j:3 * j + 3]
@@ -905,8 +917,7 @@ def correlacao(ctx):
     achados = []
     for (i, j), rho in zip(pares, coeficientes):
         a, b = medidas[i].nome, medidas[j].nome
-        derivada = b in ctx.derivadas.get(a, set()) or a in ctx.derivadas.get(b, set())
-        if rho is not None and abs(rho) >= MIN_CORRELACAO and not derivada:
+        if rho is not None and abs(rho) >= MIN_CORRELACAO and not _vinculadas(ctx, a, b):
             achados.append((abs(rho), rho, a, b))
 
     for _, rho, a, b in sorted(achados, reverse=True, key=lambda item: item[0])[:MAX_CORRELACOES]:

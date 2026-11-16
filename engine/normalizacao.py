@@ -6,6 +6,7 @@ mesma tabela, e o SQL pode ser mostrado ao usuário. A tabela `bruta` nunca muda
 o resultado vai para `limpa`.
 """
 
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 
@@ -14,7 +15,8 @@ import duckdb
 from engine.consultas import faixa_normal
 from engine.limites import LOCAL, Limites
 from engine.perfil import Perfil, PerfilColuna
-from engine.sql import LISTA_VAZIOS, colunas_de, eh_nulo, ident, literal, nome_simples
+from engine import manipulacao
+from engine.sql import LINHA, LISTA_VAZIOS, colunas_de, eh_interna, eh_nulo, ident, literal, nome_simples
 from engine.tipos import FALSOS, RE_MILHAR, RE_UNIDADE, VERDADEIROS
 
 # "1.234" é mil ou um vírgula dois três quatro? Sozinho o texto não diz, então
@@ -112,6 +114,9 @@ class Relatorio:
     colunas_depois: int
     passos: list[ResultadoPasso]
     sql: str
+    # [título, SELECT, nome do trecho] de cada passo que deu certo. Guardar os
+    # trechos deixa somar um passo novo ao SQL sem recompilar a receita toda.
+    partes: list[list[str]] = field(default_factory=list)
 
 
 def garantir_macros(con: duckdb.DuckDBPyConnection) -> None:
@@ -181,9 +186,24 @@ EXPRESSOES = {
 }
 
 
+PASSOS_DA_SANDBOX = {"editar_celulas", "remover_linhas", "filtrar_linhas", "renomear_coluna"}
+
+
 def compilar(passo: dict, colunas: list[tuple[str, str]], origem: str) -> str:
-    """O SELECT que aplica um passo sobre `origem`."""
+    """O SELECT que aplica um passo sobre `origem`.
+
+    `colunas` pode trazer as colunas internas, como o número da linha: elas
+    passam pelo passo sem serem vistas como dados.
+    """
     op = passo.get("op")
+    if op in PASSOS_DA_SANDBOX:
+        return manipulacao.compilar(passo, colunas, origem)
+    if op == "formula":
+        from engine import formulas
+        return formulas.compilar_passo(passo, colunas, origem)
+
+    tem_numero = any(nome == LINHA for nome, _ in colunas)
+    colunas = [(nome, tipo) for nome, tipo in colunas if not eh_interna(nome)]
     nomes = [nome for nome, _ in colunas]
 
     if op in EXPRESSOES:
@@ -195,7 +215,12 @@ def compilar(passo: dict, colunas: list[tuple[str, str]], origem: str) -> str:
         return f"SELECT * FROM {origem} WHERE NOT ({toda_vazia})"
 
     if op == "remover_duplicatas":
-        return f"SELECT DISTINCT * FROM {origem}"
+        if not tem_numero:
+            return f"SELECT DISTINCT * FROM {origem}"
+        # Fica a primeira aparição de cada linha repetida, com o número dela.
+        lista = ", ".join(ident(nome) for nome in nomes)
+        return (f"SELECT min({ident(LINHA)}) AS {ident(LINHA)}, {lista} FROM {origem} GROUP BY ALL "
+                f"ORDER BY {ident(LINHA)}")
 
     if op == "remover_extremos":
         _exigir(passo["coluna"], nomes)
@@ -258,6 +283,10 @@ def descrever(passo: dict) -> str:
         return f"Remover colunas: {', '.join(passo['colunas'])}"
     if op == "coluna_calculada":
         return f"Calcular {passo['nome']} = {passo['a']} {passo['operador']} {passo['b']}"
+    if op == "formula":
+        return f"Calcular {passo.get('nome')} = {passo.get('formula')}"
+    if op in PASSOS_DA_SANDBOX:
+        return manipulacao.descrever(passo)
     return str(op)
 
 
@@ -275,31 +304,47 @@ def aplicar(con: duckdb.DuckDBPyConnection, receita: list[dict],
     resultados, partes = [], []
     anterior = origem
     for indice, passo in enumerate(receita, 1):
-        titulo = descrever(passo)
-        colunas = colunas_de(con, destino)
-        antes = _linhas(con, destino)
-        try:
-            selecao = compilar(passo, colunas, alvo)
-            alterados, perdidos = _medir(con, passo, destino)
-            con.execute(f"CREATE OR REPLACE TABLE {alvo} AS {selecao}")
-        except (KeyError, TypeError, ValueError, duckdb.Error) as erro:
-            mensagem = str(erro).strip().splitlines()[0][:200]
-            resultados.append(ResultadoPasso(indice, titulo, str(passo.get("op")), "falhou",
-                                             antes, antes, erro=mensagem))
-            continue
-
-        depois = _linhas(con, destino)
-        resultados.append(ResultadoPasso(indice, titulo, passo["op"], "ok", antes, depois, alterados, perdidos))
-        partes.append((titulo, compilar(passo, colunas, anterior), f"passo_{indice}"))
-        anterior = f"passo_{indice}"
+        resultado, parte = aplicar_passo(con, passo, indice, destino, destino, anterior)
+        resultados.append(resultado)
+        if parte:
+            partes.append(parte)
+            anterior = parte[2]
 
     return Relatorio(linhas_antes, _linhas(con, destino), colunas_antes,
-                     len(colunas_de(con, destino)), resultados, _montar_sql(partes, origem))
+                     len(colunas_de(con, destino)), resultados, _montar_sql(partes, origem), partes)
+
+
+def aplicar_passo(con: duckdb.DuckDBPyConnection, passo: dict, indice: int, origem: str, destino: str,
+                  anterior_no_sql: str) -> tuple[ResultadoPasso, list[str] | None]:
+    """Cria `destino` aplicando um passo sobre `origem` (podem ser a mesma tabela).
+
+    Se o passo falha, `destino` não muda. Devolve o resultado e o trecho de SQL
+    do passo, escrito sobre `anterior_no_sql`, para montar o SQL da receita.
+    """
+    garantir_macros(con)
+    titulo = descrever(passo)
+    colunas = colunas_de(con, origem, internas=True)
+    antes = _linhas(con, origem)
+    try:
+        selecao = compilar(passo, colunas, ident(origem))
+        alterados, perdidos = _medir(con, passo, origem)
+        con.execute(f"CREATE OR REPLACE TABLE {ident(destino)} AS {selecao}")
+    except (KeyError, TypeError, ValueError, duckdb.Error) as erro:
+        mensagem = str(erro).strip().splitlines()[0][:200]
+        return ResultadoPasso(indice, titulo, str(passo.get("op")), "falhou", antes, antes, erro=mensagem), None
+
+    depois = _linhas(con, destino)
+    if passo["op"] in {"remover_linhas", "filtrar_linhas"}:
+        alterados = antes - depois
+    parte = [titulo, compilar(passo, colunas, anterior_no_sql), f"passo_{indice}"]
+    return ResultadoPasso(indice, titulo, passo["op"], "ok", antes, depois, alterados, perdidos), parte
 
 
 def _medir(con, passo: dict, tabela: str) -> tuple[int, int]:
     """Quantos valores o passo muda e quantos ele perde, antes de executar."""
     op = passo["op"]
+    if op == "editar_celulas":
+        return manipulacao.edicoes_perdidas(con, passo, dict(colunas_de(con, tabela)))
     if op not in EXPRESSOES:
         return 0, 0
     nome = passo["coluna"]
@@ -312,6 +357,10 @@ def _medir(con, passo: dict, tabela: str) -> tuple[int, int]:
         FROM {ident(tabela)}
     """).fetchone()
     return alterados, perdidos
+
+
+def montar_sql(partes: list[list[str]], origem: str) -> str:
+    return _montar_sql(partes, origem)
 
 
 def _montar_sql(partes: list[tuple[str, str, str]], origem: str) -> str:
@@ -617,12 +666,25 @@ def unidades_da_receita(receita: list[dict]) -> dict[str, str]:
             operandos = {unidades.get(passo["a"]), unidades.get(passo["b"])}
             if "BRL" in operandos and passo["operador"] in {"+", "-", "*"}:
                 unidades[passo["nome"]] = "BRL"
+        if passo.get("op") == "formula":
+            texto = str(passo.get("formula") or "")
+            if re.search(r"CONVERT", texto, re.I) and re.search(r"[\"']BRL[\"']", texto, re.I):
+                unidades[passo["nome"]] = "BRL"
+            else:
+                unidades.pop(passo.get("nome"), None)
+        if passo.get("op") == "renomear_coluna" and passo.get("coluna") in unidades:
+            unidades[passo["nome"]] = unidades.pop(passo["coluna"])
     return unidades
 
 
 def colunas_derivadas(receita: list[dict]) -> dict[str, set[str]]:
     """Coluna calculada -> colunas de onde ela veio. Correlação entre elas é óbvia."""
-    return {
-        passo["nome"]: {passo["a"], passo["b"]}
-        for passo in receita if passo.get("op") == "coluna_calculada"
-    }
+    from engine import formulas
+
+    derivadas = {}
+    for passo in receita:
+        if passo.get("op") == "coluna_calculada":
+            derivadas[passo["nome"]] = {passo["a"], passo["b"]}
+        elif passo.get("op") == "formula":
+            derivadas[passo["nome"]] = formulas.colunas_usadas(passo)
+    return derivadas

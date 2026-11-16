@@ -4,17 +4,19 @@ import { useState, type DragEvent } from "react";
 import { Janela } from "@/components/Janela";
 import { TabelaDados } from "@/components/TabelaDados";
 import { fmtBytes, fmtInteiro } from "@/lib/formato";
-import type { Estado } from "@/lib/tipos";
+import type { Tabela } from "@/lib/tipos";
 
 type Props = {
-  estado: Estado | null;
+  sessao: string | null;
+  tabela: Tabela | null;
   ocupado: boolean;
   aoEnviar: (arquivo: File) => void;
   aoExemplo: () => void;
   aoTrocarAba: (aba: string) => void;
+  aoCarregarAbas: () => void;
 };
 
-export function BlocoArquivo({ estado, ocupado, aoEnviar, aoExemplo, aoTrocarAba }: Props) {
+export function BlocoArquivo({ sessao, tabela, ocupado, aoEnviar, aoExemplo, aoTrocarAba, aoCarregarAbas }: Props) {
   const [arrastando, setArrastando] = useState(false);
 
   const soltar = (evento: DragEvent) => {
@@ -24,7 +26,7 @@ export function BlocoArquivo({ estado, ocupado, aoEnviar, aoExemplo, aoTrocarAba
     if (arquivo) aoEnviar(arquivo);
   };
 
-  if (!estado) {
+  if (!sessao || !tabela) {
     return (
       <Janela titulo="Novo arquivo">
         <label
@@ -48,17 +50,17 @@ export function BlocoArquivo({ estado, ocupado, aoEnviar, aoExemplo, aoTrocarAba
           <button type="button" className="botao principal" disabled={ocupado} onClick={aoExemplo}>
             Usar vendas de exemplo
           </button>
-          <span className="texto-suave">5 mil pedidos com sujeira de verdade, para ver os cinco blocos funcionando.</span>
+          <span className="texto-suave">5 mil pedidos com sujeira de verdade, para ver o hub inteiro funcionando.</span>
         </div>
         <p className="texto-suave">O arquivo original nunca é alterado e a sessão é apagada depois de 24 horas.</p>
       </Janela>
     );
   }
 
-  const { arquivo } = estado;
+  const { arquivo } = tabela;
   return (
     <>
-      <Janela titulo={arquivo.arquivo}>
+      <Janela titulo={tabela.titulo} extra={<span className="marca">{tabela.nome}</span>}>
         <dl className="numeros">
           <div className="numero"><dt>Linhas</dt><dd>{fmtInteiro(arquivo.linhas)}</dd></div>
           <div className="numero"><dt>Colunas</dt><dd>{fmtInteiro(arquivo.colunas)}</dd></div>
@@ -68,19 +70,24 @@ export function BlocoArquivo({ estado, ocupado, aoEnviar, aoExemplo, aoTrocarAba
           {arquivo.codificacao ? <div className="numero"><dt>Codificação</dt><dd>{arquivo.codificacao}</dd></div> : null}
         </dl>
         {arquivo.abas.length > 1 ? (
-          <label className="rotulo" htmlFor="aba">
-            Aba da planilha
-            <select id="aba" className="campo" value={arquivo.aba ?? ""} disabled={ocupado} onChange={(evento) => aoTrocarAba(evento.target.value)}>
-              {arquivo.abas.map((aba) => <option key={aba} value={aba}>{aba}</option>)}
-            </select>
-          </label>
+          <div className="acoes">
+            <label className="rotulo" htmlFor="aba">
+              Aba da planilha
+              <select id="aba" className="campo" value={arquivo.aba ?? ""} disabled={ocupado} onChange={(evento) => aoTrocarAba(evento.target.value)}>
+                {arquivo.abas.map((aba) => <option key={aba} value={aba}>{aba}</option>)}
+              </select>
+            </label>
+            <button type="button" className="botao" disabled={ocupado} onClick={aoCarregarAbas}>
+              Carregar as {arquivo.abas.length} abas como tabelas
+            </button>
+          </div>
         ) : null}
         {arquivo.avisos.length ? (
           <ul className="avisos">{arquivo.avisos.map((aviso) => <li key={aviso}>{aviso}</li>)}</ul>
         ) : null}
       </Janela>
       <Janela titulo="Como o arquivo chegou" semFolga>
-        <TabelaDados sessao={estado.sessao} tabela="bruta" versao={arquivo.aba ?? ""} />
+        <TabelaDados sessao={sessao} tabela={tabela.id} bruta versao={tabela.versao} />
       </Janela>
     </>
   );

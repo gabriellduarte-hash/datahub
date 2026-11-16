@@ -5,7 +5,7 @@ import { Janela, Triangulo } from "@/components/Janela";
 import { TabelaDados } from "@/components/TabelaDados";
 import { linkExportacao } from "@/lib/api";
 import { fmtInteiro } from "@/lib/formato";
-import type { Estado, Sugestao } from "@/lib/tipos";
+import type { Sugestao, Tabela } from "@/lib/tipos";
 
 const GRUPOS: { id: string; nome: string }[] = [
   { id: "vazios", nome: "Vazios disfarçados" },
@@ -55,8 +55,8 @@ function CartaoSugestao({ sugestao, marcada, aoAlternar }: { sugestao: Sugestao;
   );
 }
 
-function Resultado({ estado, aoAvancar }: { estado: Estado; aoAvancar: () => void }) {
-  const relatorio = estado.relatorio!;
+function Resultado({ sessao, tabela, aoAvancar }: { sessao: string; tabela: Tabela; aoAvancar: () => void }) {
+  const relatorio = tabela.relatorio!;
   const [copiado, setCopiado] = useState(false);
   const falhas = relatorio.passos.filter((p) => p.status === "falhou");
 
@@ -78,10 +78,10 @@ function Resultado({ estado, aoAvancar }: { estado: Estado; aoAvancar: () => voi
           <ul className="avisos">{falhas.map((p) => <li key={p.indice}>{p.titulo}: {p.erro}</li>)}</ul>
         ) : null}
         <div className="acoes">
-          <button type="button" className="botao principal" onClick={aoAvancar}>Ver gráficos →</button>
-          <a className="botao" href={linkExportacao(estado.sessao, "csv")}>Baixar CSV</a>
-          <a className="botao" href={linkExportacao(estado.sessao, "parquet")}>Baixar Parquet</a>
-          <a className="botao" href={linkExportacao(estado.sessao, "receita")}>Baixar receita</a>
+          <button type="button" className="botao principal" onClick={aoAvancar}>Ir para a sandbox →</button>
+          <a className="botao" href={linkExportacao(sessao, tabela.id, "csv")}>Baixar CSV</a>
+          <a className="botao" href={linkExportacao(sessao, tabela.id, "parquet")}>Baixar Parquet</a>
+          <a className="botao" href={linkExportacao(sessao, tabela.id, "receita")}>Baixar receita</a>
         </div>
       </Janela>
 
@@ -107,21 +107,22 @@ function Resultado({ estado, aoAvancar }: { estado: Estado; aoAvancar: () => voi
 
       <Janela titulo="SQL gerado">
         <div className="terminal-cabeca">
-          <span className="texto-suave">A receita inteira como uma consulta. Roda em qualquer DuckDB com a tabela bruta.</span>
+          <span className="texto-suave">A receita inteira como uma consulta, inclusive os passos da sandbox. Roda em qualquer DuckDB com a tabela bruta.</span>
           <button type="button" className="botao pequeno" onClick={copiar}>{copiado ? "Copiado" : "Copiar"}</button>
         </div>
         <pre className="terminal" tabIndex={0}>{relatorio.sql}</pre>
       </Janela>
 
       <Janela titulo="Tabela limpa" semFolga>
-        <TabelaDados sessao={estado.sessao} tabela="limpa" versao={relatorio.sql} />
+        <TabelaDados sessao={sessao} tabela={tabela.id} versao={tabela.versao} />
       </Janela>
     </>
   );
 }
 
 type Props = {
-  estado: Estado;
+  sessao: string;
+  tabela: Tabela;
   ocupado: boolean;
   selecao: Set<string>;
   aoAlternar: (id: string) => void;
@@ -129,9 +130,9 @@ type Props = {
   aoAvancar: () => void;
 };
 
-export function BlocoNormalizacao({ estado, ocupado, selecao, aoAlternar, aoAplicar, aoAvancar }: Props) {
+export function BlocoNormalizacao({ sessao, tabela, ocupado, selecao, aoAlternar, aoAplicar, aoAvancar }: Props) {
   const [confirmando, setConfirmando] = useState(false);
-  const escolhidas = estado.sugestoes.filter((s) => selecao.has(s.id));
+  const escolhidas = tabela.sugestoes.filter((s) => selecao.has(s.id));
   const colunas = escolhidas.flatMap((s) => (s.passo.op === "remover_colunas" ? (s.passo.colunas as string[]) : []));
 
   const aplicar = () => {
@@ -141,10 +142,15 @@ export function BlocoNormalizacao({ estado, ocupado, selecao, aoAlternar, aoApli
 
   return (
     <>
-      {estado.relatorio ? <Resultado estado={estado} aoAvancar={aoAvancar} /> : null}
+      {tabela.relatorio ? <Resultado sessao={sessao} tabela={tabela} aoAvancar={aoAvancar} /> : null}
 
-      <Janela titulo={estado.relatorio ? "Refazer a normalização" : "Passos sugeridos"}>
-        {estado.sugestoes.length === 0 ? (
+      <Janela titulo={tabela.relatorio ? "Refazer a normalização" : "Passos sugeridos"}>
+        {tabela.manipulacao.length ? (
+          <p className="texto-suave">
+            Os {tabela.manipulacao.length} passos da sandbox continuam valendo: eles são aplicados de novo por cima da normalização.
+          </p>
+        ) : null}
+        {tabela.sugestoes.length === 0 ? (
           <p>Nada para normalizar: o arquivo já chegou limpo.</p>
         ) : (
           <p className="texto-suave">
@@ -153,7 +159,7 @@ export function BlocoNormalizacao({ estado, ocupado, selecao, aoAlternar, aoApli
           </p>
         )}
         {GRUPOS.map((grupo) => {
-          const lista = estado.sugestoes.filter((s) => s.grupo === grupo.id);
+          const lista = tabela.sugestoes.filter((s) => s.grupo === grupo.id);
           if (!lista.length) return null;
           return (
             <div className="grupo" key={grupo.id}>
@@ -165,7 +171,7 @@ export function BlocoNormalizacao({ estado, ocupado, selecao, aoAlternar, aoApli
           );
         })}
         <div className="rodape-acao">
-          <span>{escolhidas.length} de {estado.sugestoes.length} passos marcados</span>
+          <span>{escolhidas.length} de {tabela.sugestoes.length} passos marcados</span>
           <button type="button" className="botao principal" disabled={ocupado} onClick={aplicar}>
             Aplicar e analisar
           </button>

@@ -122,24 +122,94 @@ export type Execucao = {
   insights: number;
 };
 
-export type Estado = {
-  sessao: string;
+export type Tabela = {
+  id: string;
+  nome: string;
+  titulo: string;
+  origem: "arquivo" | "consulta" | "empilhada";
   blocos: EstadoBloco[];
   arquivo: Leitura;
   perfil: Perfil | null;
   sugestoes: Sugestao[];
   papeis: Record<string, Papel>;
-  receita?: Passo[];
-  relatorio?: Relatorio | null;
-  perfil_limpo?: Perfil | null;
-  graficos?: Grafico[];
-  insights?: { insights: Insight[]; execucoes: Execucao[] } | null;
+  receita: Passo[] | null;
+  manipulacao: Passo[];
+  relatorio: Relatorio | null;
+  perfil_limpo: Perfil | null;
+  desfazer_rapido: boolean;
+  versao: number;
+  caminho?: string;
 };
+
+export type Base = { tipo: "tabela" | "visao"; id: string };
+
+export type Analise = {
+  base: Base;
+  rotulo: string;
+  linhas: number;
+  desatualizada: boolean;
+  blocos: EstadoBloco[];
+  perfil_limpo: Perfil;
+  unidades: Record<string, string>;
+  graficos: Grafico[];
+  insights: { insights: Insight[]; execucoes: Execucao[] } | null;
+};
+
+export type PontaRelacao = { tabela: string; coluna: string };
+export type Relacao = { id: string; de: PontaRelacao; para: PontaRelacao; cobertura: number };
+export type Juncao = { relacao: string; tabela: string; modo: "colunas" | "resumo" };
+export type Visao = { id: string; nome: string; tabela: string; juncoes: Juncao[]; linhas: number; erro: string | null };
+export type Consulta = { id: string; nome: string; sql: string };
+
+export type Area = {
+  sessao: string;
+  tabelas: Tabela[];
+  ativa: string | null;
+  base: Base | null;
+  analise: Analise | null;
+  relacoes: Relacao[];
+  visoes: Visao[];
+  consultas: Consulta[];
+  ultimo_passo?: ResultadoPasso;
+};
+
+export type Filtro = { coluna: string; operador: string; valor?: string };
 
 export type PaginaLinhas = {
   colunas: { nome: string; tipo: string }[];
+  numeros: (number | null)[];
+  linhas: (string | number | boolean | null)[][];
+  inicio: number;
+  total: number;
+  filtradas: number;
+};
+
+export type Contagem = { coluna: string; termo: string; linhas: number; encontradas: number };
+
+export type PreviaFormula = {
+  sql: string;
+  tipo: string;
+  colunas: string[];
+  previa: { linha: number | null; valor: string | number | boolean | null }[];
+  linhas: number;
+  vazios: number;
+};
+
+export type ResultadoSql = {
+  chave: string;
+  colunas: { nome: string; tipo: string }[];
   linhas: (string | number | boolean | null)[][];
   total: number;
-  pagina: number;
-  por_pagina: number;
+  inicio: number;
+  duracao_ms: number;
+  reaproveitada: boolean;
+};
+
+export type EsquemaColuna = { nome: string; tipo: string; chave: boolean; aponta: boolean };
+export type EsquemaTabela = { id: string; nome: string; titulo: string; linhas: number; normalizada: boolean; colunas: EsquemaColuna[] };
+export type Esquema = {
+  tabelas: EsquemaTabela[];
+  relacoes: Relacao[];
+  visoes: Visao[];
+  sugestoes: { de: PontaRelacao; para: PontaRelacao; cobertura: number }[];
 };

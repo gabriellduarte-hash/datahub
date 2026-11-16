@@ -52,6 +52,9 @@ class Limites:
     max_insights_exibidos: int = 20
     linhas_amostra: int = 1_000_000     # análises pesadas acima disso usam amostra, sempre avisada
     timeout_analisador_s: int = 15      # um analisador lento é pulado, os outros seguem
+    linhas_reanalise_automatica: int = 200_000  # até aqui, gráficos e insights se refazem sozinhos após uma edição
+    timeout_consulta_s: int = 15        # uma consulta SQL do usuário é interrompida depois disso
+    max_linhas_consulta: int = 500      # linhas por página no resultado de uma consulta
 
     # A partir desta fração de nulos a coluna é "quase vazia". Ela só é
     # sinalizada, nunca sugerida para remoção: o nulo pode ter significado

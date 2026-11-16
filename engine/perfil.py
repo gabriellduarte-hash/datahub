@@ -105,7 +105,7 @@ def perfilar_tabela(con: duckdb.DuckDBPyConnection, tabela: str, limites: Limite
     nulos_sql = [eh_nulo(nome, tipo) for nome, tipo in colunas]
     total, vazias, por_coluna = _contar(con, tabela, colunas, nulos_sql)
     validas = total - vazias
-    duplicadas = _duplicadas(con, tabela, nulos_sql)
+    duplicadas = _duplicadas(con, tabela, colunas, nulos_sql)
 
     con.execute(f"""
         CREATE OR REPLACE TEMP TABLE __amostra AS
@@ -217,10 +217,12 @@ def _contar(con, tabela, colunas, nulos_sql):
     return total, vazias, por_coluna
 
 
-def _duplicadas(con, tabela, nulos_sql) -> int:
+def _duplicadas(con, tabela, colunas, nulos_sql) -> int:
+    """Compara só as colunas do arquivo: o número da linha é sempre diferente."""
     nao_vazia = "NOT (" + " AND ".join(nulos_sql) + ")"
+    lista = ", ".join(ident(nome) for nome, _ in colunas)
     return con.execute(f"""
-        WITH cheias AS (SELECT * FROM {ident(tabela)} WHERE {nao_vazia})
+        WITH cheias AS (SELECT {lista} FROM {ident(tabela)} WHERE {nao_vazia})
         SELECT (SELECT count(*) FROM cheias) - (SELECT count(*) FROM (SELECT DISTINCT * FROM cheias))
     """).fetchone()[0]
 

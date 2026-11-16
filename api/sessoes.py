@@ -24,7 +24,7 @@ LIMITES = PUBLICO if os.environ.get("DATAHUB_MODO") == "publico" else LOCAL
 HORAS_DE_VIDA = 24
 FORMATO_ID = re.compile(r"[A-Za-z0-9_-]{16,64}")
 
-_travas = defaultdict(threading.Lock)
+_travas = defaultdict(threading.RLock)
 
 
 class SessaoNaoEncontrada(Exception):
@@ -61,6 +61,20 @@ def abrir(sessao: str, acesso_a_arquivos: bool = False):
             yield con
         finally:
             con.close()
+
+
+@contextmanager
+def trabalhar(sessao: str, acesso_a_arquivos: bool = False, salvar: bool = True):
+    """Uma operação inteira: trava a sessão, abre o banco, lê o estado e salva no fim.
+
+    Se a operação falha no meio, o estado não é salvo: a sessão fica como estava.
+    """
+    with _travas[sessao]:
+        with abrir(sessao, acesso_a_arquivos) as con:
+            estado = ler_estado(sessao)
+            yield con, estado
+            if salvar:
+                salvar_estado(sessao, estado)
 
 
 def ler_estado(sessao: str) -> dict:
