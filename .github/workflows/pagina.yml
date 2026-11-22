@@ -1,0 +1,54 @@
+# A cada envio para a main: publica o site estático no GitHub Pages, com o
+# motor rodando no navegador (Pyodide). Endereço: https://<usuário>.github.io/datahub/
+name: Página
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pagina
+  cancel-in-progress: true
+
+jobs:
+  montar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Empacotar o motor (código Python e bibliotecas que o Pyodide não traz)
+        run: python navegador/empacotar.py
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Exportar a interface, falando com o motor do navegador
+        working-directory: web
+        env:
+          DATAHUB_EXPORTAR: "1"
+          NEXT_PUBLIC_MOTOR: navegador
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+          NEXT_PUBLIC_API_URL: ""
+        run: npm ci && npm run build
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: web/out
+
+  publicar:
+    needs: montar
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publicacao.outputs.page_url }}
+    steps:
+      - id: publicacao
+        uses: actions/deploy-pages@v5

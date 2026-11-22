@@ -435,3 +435,9 @@ input.campo { padding: 6px 9px; }
   .etapas { order: 3; width: 100%; gap: 10px; }
   .etapa { gap: 6px; padding: 5px 10px 5px 5px; font-size: 10.5px; letter-spacing: 0.03em; }
 }
+
+/* Site estático: o motor do navegador ainda carregando */
+.motor-carregando { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--tinta-suave); }
+.motor-carregando .ponto { animation: piscar-motor 1.2s steps(2) infinite; }
+@keyframes piscar-motor { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .motor-carregando .ponto { animation: none; } }

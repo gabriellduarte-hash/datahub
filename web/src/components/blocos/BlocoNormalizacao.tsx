@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Janela, Triangulo } from "@/components/Janela";
 import { TabelaDados } from "@/components/TabelaDados";
-import { linkExportacao } from "@/lib/api";
+import { Baixar } from "@/components/Baixar";
+import { caminhoExportacao } from "@/lib/api";
 import { fmtInteiro } from "@/lib/formato";
 import type { Sugestao, Tabela } from "@/lib/tipos";
 
@@ -79,9 +80,9 @@ function Resultado({ sessao, tabela, aoAvancar }: { sessao: string; tabela: Tabe
         ) : null}
         <div className="acoes">
           <button type="button" className="botao principal" onClick={aoAvancar}>Ir para a sandbox →</button>
-          <a className="botao" href={linkExportacao(sessao, tabela.id, "csv")}>Baixar CSV</a>
-          <a className="botao" href={linkExportacao(sessao, tabela.id, "parquet")}>Baixar Parquet</a>
-          <a className="botao" href={linkExportacao(sessao, tabela.id, "receita")}>Baixar receita</a>
+          <Baixar className="botao" caminho={caminhoExportacao(sessao, tabela.id, "csv")}>Baixar CSV</Baixar>
+          <Baixar className="botao" caminho={caminhoExportacao(sessao, tabela.id, "parquet")}>Baixar Parquet</Baixar>
+          <Baixar className="botao" caminho={caminhoExportacao(sessao, tabela.id, "receita")}>Baixar receita</Baixar>
         </div>
       </Janela>
 

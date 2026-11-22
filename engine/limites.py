@@ -76,6 +76,17 @@ PUBLICO = Limites(
     memoria_max="1GB",
 )
 
+# Rodando dentro do navegador (Pyodide): uma thread só e memória limitada pela
+# aba, com o arquivo e o banco guardados na própria memória.
+NAVEGADOR = Limites(
+    max_bytes_arquivo=30 * 1024**2,
+    max_linhas=1_000_000,
+    max_colunas=300,
+    max_celulas=20_000_000,
+    linhas_reanalise_automatica=50_000,
+    memoria_max="1GB",
+)
+
 # Rodando na sua máquina: o arquivo já está no disco, o que pesa é a memória.
 LOCAL = Limites(
     max_bytes_arquivo=None,

@@ -8,6 +8,7 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, placeholder } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
+import { Baixar } from "@/components/Baixar";
 import * as api from "@/lib/api";
 import { fmtInteiro, fmtTempo } from "@/lib/formato";
 import type { Area, Consulta, ResultadoSql } from "@/lib/tipos";
@@ -138,7 +139,7 @@ export function VistaSql({ area, ocupado, aoMudar, executar }: Props) {
               {area.consultas.map((c) => (
                 <li key={c.id}>
                   <button type="button" className={`link${aberta?.id === c.id ? " ativa" : ""}`} onClick={() => abrir(c)}>{c.nome}.sql</button>
-                  <a className="botao pequeno" href={api.linkConsulta(area.sessao, c.id)} aria-label={`Baixar ${c.nome}.sql`}>↓</a>
+                  <Baixar className="botao pequeno" caminho={api.caminhoConsulta(area.sessao, c.id)} titulo={`Baixar ${c.nome}.sql`}>↓</Baixar>
                   <button type="button" className="botao pequeno" aria-label={`Apagar ${c.nome}`} disabled={ocupado}
                           onClick={() => executar("Apagando a consulta", async () => { aoMudar(await api.apagarConsulta(area.sessao, c.id)); if (aberta?.id === c.id) setAberta(null); })}>×</button>
                 </li>

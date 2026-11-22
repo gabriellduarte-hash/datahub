@@ -9,9 +9,13 @@ Limpeza, sandbox e insights de planilhas, **sem IA**: regras, estatística e SQL
 
 ## Experimente
 
-| Jeito | Para quem | Como |
+**[Abrir o datahub no navegador →](https://gabriellduarte-hash.github.io/datahub/)**
+
+O site roda o motor inteiro dentro do seu navegador, sem servidor: o arquivo que você envia não sai do seu computador. A primeira visita leva alguns segundos para carregar o motor; depois o navegador guarda.
+
+| Outro jeito | Para quem | Como |
 |---|---|---|
-| **Executável** | Quem quer só usar | Baixe o arquivo do seu sistema em [Releases](https://github.com/gabriellduarte-hash/datahub/releases/latest), descompacte e abra. O hub abre no navegador e os arquivos não saem do seu computador. |
+| **Executável** | Quem quer arquivos maiores ou usar sem internet | Baixe o arquivo do seu sistema em [Releases](https://github.com/gabriellduarte-hash/datahub/releases/latest), descompacte e abra. O hub abre no navegador e os arquivos não saem do seu computador. |
 | **GitHub Codespaces** | Quem tem conta no GitHub e não quer instalar nada | [![Abrir no GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/gabriellduarte-hash/datahub?quickstart=1) Em uns 2 minutos o hub abre numa aba. Usa a cota gratuita do Codespaces de quem abre. |
 | **Código** | Quem quer ler ou mudar | Veja [Rodar](#rodar). |
 
@@ -31,6 +35,7 @@ Sem arquivo à mão? Clique em **Usar vendas de exemplo**: 5 mil pedidos com suj
 - **Receita que vira SQL.** Toda limpeza e edição é um passo de uma receita, compilada para uma consulta DuckDB que roda em qualquer lugar. Desfazer é tirar o último passo.
 - **Fórmulas do Excel em português**, como `SE(tenure < 12; "novo"; "antigo")`, traduzidas para SQL por um analisador próprio, com mensagens que dizem onde está o erro. Inclui `CONVERTER` de moedas com o histórico do Banco Central Europeu.
 - **Junções que não inflam somas.** Relações entre tabelas só trazem colunas do lado onde a chave é única. No sentido errado, o hub recusa e oferece um resumo.
+- **Roda no navegador, sem servidor.** O mesmo motor em Python e a mesma API FastAPI rodam no Pyodide (Python compilado para WebAssembly), num Web Worker. A interface troca a rede por uma ponte (`navegador/ponte.py`) e o site é só arquivos estáticos no GitHub Pages. O CI roda os testes do motor dentro do Pyodide para isso não quebrar.
 - **Pronto para o público.** No modo público, envios grandes são cortados enquanto chegam, cada visitante tem limites, as análises entram numa fila e o SQL do usuário não lê arquivos do servidor.
 - **Rápido.** Na máquina de desenvolvimento, a análise completa de 1 milhão de linhas leva 10 segundos, e a de 10 milhões, 1 minuto.
 - **Testado.** 239 testes, com dados fabricados que trazem o gabarito do que foi plantado.
@@ -118,6 +123,8 @@ Para abrir o hub (API na porta 8000 e interface na 3000):
 Depois acesse http://localhost:3000. `Ctrl+C` encerra tudo.
 
 Para rodar num endereço só, como no Codespaces, use `./servir.sh` (porta 8000).
+
+Para montar o site que roda no navegador: `python navegador/empacotar.py` e, em `web/`, `DATAHUB_EXPORTAR=1 NEXT_PUBLIC_MOTOR=navegador NEXT_PUBLIC_API_URL= npm run build`. O GitHub Actions faz isso e publica no GitHub Pages a cada envio para a `main`. Para testar o motor no Pyodide: `cd navegador && npm ci && node testar.mjs`.
 
 Para montar o executável do seu sistema: exporte a interface (`cd web && DATAHUB_EXPORTAR=1 NEXT_PUBLIC_API_URL= npm run build`), instale o PyInstaller e rode `pyinstaller datahub.spec`. O GitHub Actions faz isso para Windows, macOS e Linux a cada versão marcada com `git tag v…`.
 

@@ -5,10 +5,20 @@ import { Janela } from "@/components/Janela";
 import { TabelaDados } from "@/components/TabelaDados";
 import * as api from "@/lib/api";
 import { fmtBytes, fmtInteiro } from "@/lib/formato";
+import { acompanharMotor, NO_NAVEGADOR } from "@/lib/motor";
 import type { Saude, Tabela } from "@/lib/tipos";
 
 /* No site público o arquivo sai da máquina de quem envia: a tela diz o limite e por quanto tempo ele fica. */
 function Aviso({ saude }: { saude: Saude | null }) {
+  if (NO_NAVEGADOR) {
+    const maximo = saude?.limites.max_bytes_arquivo ?? 30 * 1024 ** 2;
+    return (
+      <p className="texto-suave">
+        Tudo roda no seu navegador: o arquivo não sai do seu computador. Arquivos de até {Math.round(maximo / 1024 ** 2)} MB.
+        A sessão fica só nesta aba e some ao recarregar a página.
+      </p>
+    );
+  }
   if (saude?.modo !== "publico") {
     return <p className="texto-suave">O arquivo original nunca é alterado e a sessão é apagada depois de {saude?.horas_de_vida ?? 24} horas.</p>;
   }
@@ -35,7 +45,10 @@ type Props = {
 export function BlocoArquivo({ sessao, tabela, ocupado, aoEnviar, aoExemplo, aoTrocarAba, aoCarregarAbas }: Props) {
   const [arrastando, setArrastando] = useState(false);
   const [saude, setSaude] = useState<Saude | null>(null);
+  const [motor, setMotor] = useState<string | null>(null);
   const vazio = !sessao || !tabela;
+
+  useEffect(() => (NO_NAVEGADOR ? acompanharMotor(setMotor) : undefined), []);
 
   useEffect(() => {
     if (vazio) api.saude().then(setSaude).catch(() => setSaude(null));
@@ -75,6 +88,12 @@ export function BlocoArquivo({ sessao, tabela, ocupado, aoEnviar, aoExemplo, aoT
           <span className="texto-suave">5 mil pedidos com sujeira de verdade, para ver o hub inteiro funcionando.</span>
         </div>
         <Aviso saude={saude} />
+        {NO_NAVEGADOR && motor ? (
+          <p className="motor-carregando" role="status">
+            <span className="ponto" aria-hidden="true" />
+            {motor}… Só a primeira visita demora; depois o navegador guarda o motor.
+          </p>
+        ) : null}
       </Janela>
     );
   }

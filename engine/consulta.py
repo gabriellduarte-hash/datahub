@@ -11,11 +11,11 @@ consulta de novo, e "salvar como tabela" aproveita o que já foi calculado.
 """
 
 import hashlib
-import threading
 import time
 
 import duckdb
 
+from engine import relogio
 from engine.sql import colunas_de, ident
 
 RESULTADO = "__resultado_sql"
@@ -60,16 +60,13 @@ def executar(con, sql: str, versao: str, guardada: str | None, inicio: int = 0, 
     ).fetchone()[0]
     if marca != guardada or not existe:
         inicio_relogio = time.perf_counter()
-        relogio = threading.Timer(tempo_limite, con.interrupt)
-        relogio.start()
         try:
-            con.execute(f"CREATE OR REPLACE TABLE {RESULTADO} AS SELECT * FROM ({texto})")
+            with relogio.tempo_limite(con, tempo_limite):
+                con.execute(f"CREATE OR REPLACE TABLE {RESULTADO} AS SELECT * FROM ({texto})")
         except duckdb.InterruptException as erro:
             raise ConsultaRecusada(f"A consulta passou de {tempo_limite} s e foi interrompida.") from erro
         except duckdb.Error as erro:
             raise ConsultaRecusada(_explicar(con, erro)) from erro
-        finally:
-            relogio.cancel()
         duracao = round((time.perf_counter() - inicio_relogio) * 1000)
 
     quantas = max(1, min(int(quantas), maximo))

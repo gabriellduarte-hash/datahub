@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# motor do navegador: gerado por navegador/empacotar.py
+/public/motor/*.zip
+/public/motor/manifesto.json
+/public/motor/rodas/

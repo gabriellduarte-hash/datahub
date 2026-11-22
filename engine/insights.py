@@ -12,13 +12,12 @@ regras olham tamanho de efeito e o ruído histórico da própria série.
 
 import math
 import statistics
-import threading
 import time
 from dataclasses import dataclass, field
 
 import duckdb
 
-from engine import formato
+from engine import formato, relogio
 from engine.consultas import (GRAOS, Sim, categorias, datas, eh_alvo, expressao_sim, faixa_normal, grao_automatico,
                               indicadores, metricas, por_grupo, ranking, serie)
 from engine.limites import LOCAL, Limites
@@ -169,16 +168,13 @@ def gerar(con: duckdb.DuckDBPyConnection, tabela: str, perfil: Perfil, unidades:
 
 def _executar(con, nome, funcao, ctx, tempo_limite) -> tuple[Execucao, list[Insight]]:
     inicio = time.perf_counter()
-    relogio = threading.Timer(tempo_limite, con.interrupt)
-    relogio.start()
     try:
-        achados = list(funcao(ctx))
+        with relogio.tempo_limite(con, tempo_limite):
+            achados = list(funcao(ctx))
     except duckdb.InterruptException:
         return Execucao(nome, "pulado", f"Passou de {tempo_limite} s.", _ms(inicio)), []
     except Exception as erro:
         return Execucao(nome, "falhou", str(erro).strip().splitlines()[0][:200], _ms(inicio)), []
-    finally:
-        relogio.cancel()
     return Execucao(nome, "ok", None, _ms(inicio), len(achados)), achados
 
 

@@ -6,6 +6,7 @@ import { BlocoNormalizacao } from "@/components/blocos/BlocoNormalizacao";
 import { BlocoPerfil } from "@/components/blocos/BlocoPerfil";
 import { Tabua } from "@/components/sandbox/Tabua";
 import * as api from "@/lib/api";
+import { aquecerMotor } from "@/lib/motor";
 import { barraAscii } from "@/lib/formato";
 import type { Area, Papel, Tabela } from "@/lib/tipos";
 
@@ -78,6 +79,7 @@ export function Hub() {
 
   /* Lê o que só existe no navegador: a sessão anterior e o tema escolhido. */
   useEffect(() => {
+    aquecerMotor();
     const salvo = lembrado(CHAVE_TEMA);
     if (salvo) {
       setTema(salvo);

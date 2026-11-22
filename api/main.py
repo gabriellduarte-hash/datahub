@@ -196,7 +196,7 @@ def erro_http(_: Request, erro: HTTPException):
 @app.get("/api/saude")
 def saude():
     """Também diz à tela em que modo o hub roda, para ela mostrar os limites certos."""
-    return {"ok": True, "modo": "publico" if sessoes.PUBLICO_ATIVO else "local",
+    return {"ok": True, "modo": sessoes.MODO,
             "horas_de_vida": sessoes.HORAS_DE_VIDA, "limites": {
         "max_bytes_arquivo": LIMITES.max_bytes_arquivo,
         "max_linhas": LIMITES.max_linhas,

@@ -4,7 +4,7 @@ import duckdb
 import pytest
 
 from engine import area as areas
-from engine import consulta, relacional
+from engine import consulta, relacional, relogio
 from engine.consulta import ConsultaRecusada
 from engine.relacional import JuncaoRecusada
 
@@ -64,6 +64,7 @@ def test_consulta_roda_pagina_e_reaproveita(loja):
     assert not nova["reaproveitada"], "mudou uma tabela: a consulta roda de novo"
 
 
+@pytest.mark.skipif(not relogio.TEM_THREADS, reason="sem threads (navegador), não há relógio para interromper")
 def test_consulta_lenta_e_interrompida(loja):
     con, _ = loja
     with pytest.raises(ConsultaRecusada, match="interrompida"):

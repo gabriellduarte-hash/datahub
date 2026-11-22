@@ -1,0 +1,8 @@
+{
+  "name": "datahub-navegador",
+  "private": true,
+  "type": "module",
+  "description": "Testa o motor do datahub no Pyodide, a mesma versão que o site estático carrega.",
+  "scripts": { "testar": "node testar.mjs" },
+  "dependencies": { "pyodide": "314.0.7" }
+}

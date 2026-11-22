@@ -19,7 +19,7 @@ from dataclasses import replace
 import duckdb
 from fastapi.encoders import jsonable_encoder
 
-from engine.limites import LOCAL, PUBLICO
+from engine.limites import LOCAL, NAVEGADOR, PUBLICO
 
 
 def _numero(nome: str, padrao: int) -> int:
@@ -31,9 +31,10 @@ def _numero(nome: str, padrao: int) -> int:
 # máquina é pequena e dividida entre visitantes: arquivos menores, sessões mais
 # curtas, poucas análises ao mesmo tempo. Cada número pode ser trocado por uma
 # variável de ambiente, para caber na máquina contratada.
-PUBLICO_ATIVO = os.environ.get("DATAHUB_MODO") == "publico"
+MODO = os.environ.get("DATAHUB_MODO", "local")  # local, publico ou navegador (navegador/ponte.py)
+PUBLICO_ATIVO = MODO == "publico"
 PASTA = Path(os.environ.get("DATAHUB_SESSOES", Path(__file__).parent.parent / ".sessoes"))
-LIMITES = PUBLICO if PUBLICO_ATIVO else LOCAL
+LIMITES = {"publico": PUBLICO, "navegador": NAVEGADOR}.get(MODO, LOCAL)
 if os.environ.get("DATAHUB_MEMORIA"):
     LIMITES = replace(LIMITES, memoria_max=os.environ["DATAHUB_MEMORIA"])
 HORAS_DE_VIDA = _numero("DATAHUB_HORAS", 6 if PUBLICO_ATIVO else 24)
