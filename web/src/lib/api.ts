@@ -1,5 +1,5 @@
 import type {
-  Area, Base, Contagem, Esquema, Filtro, Grafico, PaginaLinhas, Papel, Passo, PreviaFormula, PontaRelacao, ResultadoSql,
+  Area, Base, Contagem, Esquema, Filtro, Grafico, PaginaLinhas, Papel, Passo, PreviaFormula, PontaRelacao, ResultadoSql, Saude,
 } from "./tipos";
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -62,6 +62,7 @@ export const enviarArquivo = (arquivo: File, aoProgredir: (fracao: number) => vo
   enviarFormulario("/api/sessoes", arquivo, aoProgredir);
 export const adicionarArquivo = (sessao: string, arquivo: File, aoProgredir: (fracao: number) => void) =>
   enviarFormulario(`${s(sessao)}/tabelas`, arquivo, aoProgredir);
+export const saude = () => pedir<Saude>("/api/saude");
 export const abrirExemplo = () => pedir<Area>("/api/sessoes/exemplo", { method: "POST" });
 export const verSessao = (sessao: string) => pedir<Area>(s(sessao));
 export const escolherAtiva = (sessao: string, tabela: string) => enviarJson<Area>(`${s(sessao)}/ativa`, { tabela });

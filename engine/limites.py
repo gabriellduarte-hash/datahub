@@ -65,13 +65,15 @@ class Limites:
     memoria_max: str = "4GB"
 
 
-# Site público: hospedagem gratuita, arquivo chegando pela internet.
+# Site público: máquina pequena dividida entre visitantes, arquivo chegando
+# pela internet. Pensado para 2 a 4 GB de memória com duas análises ao mesmo
+# tempo (api/sessoes.py); a memória do DuckDB sobe com DATAHUB_MEMORIA.
 PUBLICO = Limites(
-    max_bytes_arquivo=100 * 1024**2,
-    max_linhas=10_000_000,
-    max_colunas=500,
-    max_celulas=100_000_000,
-    memoria_max="2GB",
+    max_bytes_arquivo=50 * 1024**2,
+    max_linhas=2_000_000,
+    max_colunas=300,
+    max_celulas=30_000_000,
+    memoria_max="1GB",
 )
 
 # Rodando na sua máquina: o arquivo já está no disco, o que pesa é a memória.

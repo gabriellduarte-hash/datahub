@@ -19,10 +19,12 @@ import duckdb
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from api import sessoes
-from api.sessoes import LIMITES, SessaoNaoEncontrada
+from api.publico import Protecao
+from api.sessoes import LIMITES, SessaoNaoEncontrada, ServidorOcupado
 from engine import area as areas
 from engine import cambio, consulta, formulas, graficos, relacional
 from engine.area import NaoEncontrado
@@ -42,6 +44,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+if sessoes.PUBLICO_ATIVO:
+    app.add_middleware(
+        Protecao,
+        max_arquivo=LIMITES.max_bytes_arquivo,
+        pedidos_por_minuto=sessoes._numero("DATAHUB_PEDIDOS_MINUTO", 600),
+        sessoes_por_hora=sessoes._numero("DATAHUB_SESSOES_HORA", 20),
+        cabecalho_ip=os.environ.get("DATAHUB_IP_CABECALHO"),
+    )
 
 LINHAS_EXEMPLO = 5_000
 PEDACO_UPLOAD = 1024 * 1024
@@ -146,6 +156,14 @@ def sessao_nao_encontrada(_: Request, __: SessaoNaoEncontrada):
                         status_code=404)
 
 
+@app.exception_handler(ServidorOcupado)
+def servidor_ocupado(_: Request, erro: ServidorOcupado):
+    mensagem = ("O hub está cheio agora, com muitas sessões abertas. Tente de novo em alguns minutos."
+                if erro.motivo == "sessoes" else
+                "O servidor está ocupado com outras análises. Tente de novo em alguns segundos.")
+    return JSONResponse({"erro": mensagem}, status_code=503, headers={"Retry-After": "30"})
+
+
 @app.exception_handler(NaoEncontrado)
 def nao_encontrado(_: Request, erro: NaoEncontrado):
     return JSONResponse({"erro": str(erro)}, status_code=404)
@@ -177,7 +195,9 @@ def erro_http(_: Request, erro: HTTPException):
 
 @app.get("/api/saude")
 def saude():
-    return {"ok": True, "limites": {
+    """Também diz à tela em que modo o hub roda, para ela mostrar os limites certos."""
+    return {"ok": True, "modo": "publico" if sessoes.PUBLICO_ATIVO else "local",
+            "horas_de_vida": sessoes.HORAS_DE_VIDA, "limites": {
         "max_bytes_arquivo": LIMITES.max_bytes_arquivo,
         "max_linhas": LIMITES.max_linhas,
         "max_colunas": LIMITES.max_colunas,
@@ -637,3 +657,12 @@ def _exportar_csv(con, tabela: str, destino: Path) -> None:
 
 def _sem_aspas(caminho: Path) -> str:
     return str(caminho).replace("'", "''")
+
+
+# ----- a interface -----
+# Na imagem de produção, a interface vira arquivos estáticos (next build com
+# DATAHUB_EXPORTAR=1) e a própria API os serve: um endereço só, sem CORS.
+# Montada por último, para as rotas /api/ terem a vez.
+PASTA_WEB = os.environ.get("DATAHUB_WEB")
+if PASTA_WEB and (Path(PASTA_WEB) / "index.html").is_file():
+    app.mount("/", StaticFiles(directory=PASTA_WEB, html=True), name="web")

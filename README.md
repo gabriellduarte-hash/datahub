@@ -105,4 +105,37 @@ Ficam em `engine/limites.py`.
 
 - **Carga:** protegem a máquina. São 10 milhões de linhas, 500 colunas e um teto de células.
 - **Análise:** protegem os insights. Bases de até 200 mil linhas se reanalisam sozinhas depois de uma edição.
-- **Site público:** `DATAHUB_MODO=publico` liga os limites próprios dele.
+- **Site público:** `DATAHUB_MODO=publico` liga os limites próprios dele: arquivos de até 50 MB, 2 milhões de linhas e 30 milhões de células.
+
+## Publicar
+
+O `Dockerfile` gera uma imagem com o hub inteiro. A interface vira arquivos estáticos e a API os serve no mesmo endereço, então não há CORS nem dois serviços para manter. A imagem já liga o modo público.
+
+```bash
+podman build -t datahub .
+podman run --rm -p 8080:8080 datahub   # http://localhost:8080
+```
+
+No modo público, `api/publico.py` e `api/sessoes.py` protegem a máquina:
+
+- um envio acima do limite é cortado enquanto chega, sem ocupar o disco;
+- cada visitante tem um limite de pedidos por minuto e de sessões novas por hora;
+- poucas análises rodam ao mesmo tempo, e as outras esperam na fila;
+- as sessões duram menos e têm um teto. Com o teto cheio, as paradas há mais de 30 minutos dão lugar às novas;
+- a configuração do DuckDB fica travada, e nem o SQL do usuário religa o acesso a arquivos.
+
+Cada número pode ser trocado por uma variável de ambiente, para caber na máquina contratada:
+
+| Variável | Padrão no modo público | O que controla |
+|---|---|---|
+| `DATAHUB_MEMORIA` | `1GB` | Memória do DuckDB por análise |
+| `DATAHUB_TRABALHOS` | `2` | Análises ao mesmo tempo |
+| `DATAHUB_THREADS` | `2` | Núcleos que cada análise usa |
+| `DATAHUB_HORAS` | `6` | Vida de uma sessão parada |
+| `DATAHUB_MAX_SESSOES` | `150` | Sessões guardadas ao mesmo tempo |
+| `DATAHUB_PEDIDOS_MINUTO` | `600` | Pedidos por visitante por minuto |
+| `DATAHUB_SESSOES_HORA` | `20` | Sessões novas por visitante por hora |
+| `DATAHUB_IP_CABECALHO` | nenhum | Cabeçalho com o IP do visitante, como `fly-client-ip` |
+| `DATAHUB_SESSOES` | `/tmp/sessoes` | Pasta das sessões |
+
+Conta de memória: análises ao mesmo tempo × memória por análise, mais uns 300 MB do Python. Os padrões cabem numa máquina de 2 a 4 GB.

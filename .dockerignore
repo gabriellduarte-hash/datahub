@@ -1,0 +1,16 @@
+.git
+.idea
+.venv
+.sessoes
+.pytest_cache
+**/__pycache__
+*.egg-info
+*.duckdb
+tests
+samples/dados
+samples/grandes
+web/node_modules
+web/.next
+web/out
+Dockerfile
+.dockerignore

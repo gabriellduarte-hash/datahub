@@ -219,3 +219,11 @@ export type Esquema = {
   visoes: Visao[];
   sugestoes: { de: PontaRelacao; para: PontaRelacao; cobertura: number }[];
 };
+
+/* O que /api/saude conta sobre o servidor: na máquina de quem roda ou no site público. */
+export type Saude = {
+  ok: boolean;
+  modo: "local" | "publico";
+  horas_de_vida: number;
+  limites: { max_bytes_arquivo: number | null; max_linhas: number; max_colunas: number; max_celulas: number };
+};

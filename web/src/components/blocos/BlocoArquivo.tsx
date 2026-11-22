@@ -1,10 +1,26 @@
 "use client";
 
-import { useState, type DragEvent } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 import { Janela } from "@/components/Janela";
 import { TabelaDados } from "@/components/TabelaDados";
+import * as api from "@/lib/api";
 import { fmtBytes, fmtInteiro } from "@/lib/formato";
-import type { Tabela } from "@/lib/tipos";
+import type { Saude, Tabela } from "@/lib/tipos";
+
+/* No site público o arquivo sai da máquina de quem envia: a tela diz o limite e por quanto tempo ele fica. */
+function Aviso({ saude }: { saude: Saude | null }) {
+  if (saude?.modo !== "publico") {
+    return <p className="texto-suave">O arquivo original nunca é alterado e a sessão é apagada depois de {saude?.horas_de_vida ?? 24} horas.</p>;
+  }
+  const maximo = saude.limites.max_bytes_arquivo;
+  return (
+    <p className="texto-suave">
+      {maximo ? `Arquivos de até ${Math.round(maximo / 1024 ** 2)} MB. ` : ""}
+      O arquivo fica no servidor só enquanto a sessão existe e é apagado em {saude.horas_de_vida} horas.
+      Não envie dados pessoais ou sigilosos.
+    </p>
+  );
+}
 
 type Props = {
   sessao: string | null;
@@ -18,6 +34,12 @@ type Props = {
 
 export function BlocoArquivo({ sessao, tabela, ocupado, aoEnviar, aoExemplo, aoTrocarAba, aoCarregarAbas }: Props) {
   const [arrastando, setArrastando] = useState(false);
+  const [saude, setSaude] = useState<Saude | null>(null);
+  const vazio = !sessao || !tabela;
+
+  useEffect(() => {
+    if (vazio) api.saude().then(setSaude).catch(() => setSaude(null));
+  }, [vazio]);
 
   const soltar = (evento: DragEvent) => {
     evento.preventDefault();
@@ -26,7 +48,7 @@ export function BlocoArquivo({ sessao, tabela, ocupado, aoEnviar, aoExemplo, aoT
     if (arquivo) aoEnviar(arquivo);
   };
 
-  if (!sessao || !tabela) {
+  if (vazio) {
     return (
       <Janela titulo="Novo arquivo">
         <label
@@ -52,7 +74,7 @@ export function BlocoArquivo({ sessao, tabela, ocupado, aoEnviar, aoExemplo, aoT
           </button>
           <span className="texto-suave">5 mil pedidos com sujeira de verdade, para ver o hub inteiro funcionando.</span>
         </div>
-        <p className="texto-suave">O arquivo original nunca é alterado e a sessão é apagada depois de 24 horas.</p>
+        <Aviso saude={saude} />
       </Janela>
     );
   }
