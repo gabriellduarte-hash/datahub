@@ -1,0 +1,19 @@
+{
+  // Abre o hub pronto para usar no GitHub Codespaces: instala, exporta a
+  // interface e sobe tudo na porta 8000, que abre numa aba do navegador.
+  "name": "datahub",
+  "image": "mcr.microsoft.com/devcontainers/python:3.14",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "24" }
+  },
+  "hostRequirements": { "cpus": 2, "memory": "8gb" },
+  "postCreateCommand": "python -m venv .venv && .venv/bin/pip install -r requirements-servidor.txt pytest==9.2.0 httpx==0.28.1 && cd web && npm ci && DATAHUB_EXPORTAR=1 NEXT_PUBLIC_API_URL= npm run build",
+  "postAttachCommand": "./servir.sh",
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": { "label": "datahub", "onAutoForward": "openBrowser" }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": ["README.md"] }
+  }
+}

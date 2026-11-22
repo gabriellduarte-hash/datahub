@@ -1,14 +1,47 @@
 # datahub
 
-Normalização, sandbox, gráficos e insights de planilhas, sem IA: regras, estatística e SQL.
+[![Testes](https://github.com/gabriellduarte-hash/datahub/actions/workflows/testes.yml/badge.svg)](https://github.com/gabriellduarte-hash/datahub/actions/workflows/testes.yml)
+[![Última versão](https://img.shields.io/github/v/release/gabriellduarte-hash/datahub?label=execut%C3%A1vel)](https://github.com/gabriellduarte-hash/datahub/releases/latest)
 
-O hub tem três etapas:
+Limpeza, sandbox e insights de planilhas, **sem IA**: regras, estatística e SQL. Você envia um CSV, Excel ou Parquet; o hub mostra como o arquivo chegou, sugere uma receita de limpeza, deixa editar os dados como numa planilha e monta um painel com os achados que passam do acaso.
 
-1. **Triagem**: lê o arquivo e mostra o perfil de cada coluna.
-2. **Normalização**: sugere uma receita de limpeza; você marca os passos.
-3. **Sandbox**: uma tábua com a planilha no meio, gráficos ao lado e insights embaixo.
+![A sandbox: a planilha em cima, a base de análise no meio e o painel executivo embaixo](docs/imagens/sandbox.png)
 
-Uma sessão pode ter várias tabelas: arquivos, abas do Excel, consultas salvas e arquivos empilhados.
+## Experimente
+
+| Jeito | Para quem | Como |
+|---|---|---|
+| **Executável** | Quem quer só usar | Baixe o arquivo do seu sistema em [Releases](https://github.com/gabriellduarte-hash/datahub/releases/latest), descompacte e abra. O hub abre no navegador e os arquivos não saem do seu computador. |
+| **GitHub Codespaces** | Quem tem conta no GitHub e não quer instalar nada | [![Abrir no GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/gabriellduarte-hash/datahub?quickstart=1) Em uns 2 minutos o hub abre numa aba. Usa a cota gratuita do Codespaces de quem abre. |
+| **Código** | Quem quer ler ou mudar | Veja [Rodar](#rodar). |
+
+Sem arquivo à mão? Clique em **Usar vendas de exemplo**: 5 mil pedidos com sujeira de verdade e efeitos de negócio plantados.
+
+## O que ele faz
+
+1. **Triagem:** lê o arquivo e mostra o perfil de cada coluna (tipo, vazios, valores típicos, papel na análise).
+2. **Normalização:** sugere uma receita de limpeza (números em formato brasileiro, sim/não, datas, duplicadas, vazios disfarçados) e mostra o SQL que ela gera.
+3. **Sandbox:** os dados em cima, em três vistas (planilha editável com fórmulas em português, esquema das tabelas e SQL), e o painel executivo embaixo, com cada insight ao lado do gráfico do dado que ele cita.
+
+![O painel executivo: números da base e cada insight com o seu gráfico](docs/imagens/painel.png)
+
+## Destaques técnicos
+
+- **Insights sem descobertas falsas.** Cada analisador testa se o efeito passa do acaso, desconta o volume e ignora regras de cadastro (como "quem não tem telefone está em Sem telefone"). Em 180 bases de puro ruído, o hub não reportou nenhum achado.
+- **Receita que vira SQL.** Toda limpeza e edição é um passo de uma receita, compilada para uma consulta DuckDB que roda em qualquer lugar. Desfazer é tirar o último passo.
+- **Fórmulas do Excel em português**, como `SE(tenure < 12; "novo"; "antigo")`, traduzidas para SQL por um analisador próprio, com mensagens que dizem onde está o erro. Inclui `CONVERTER` de moedas com o histórico do Banco Central Europeu.
+- **Junções que não inflam somas.** Relações entre tabelas só trazem colunas do lado onde a chave é única. No sentido errado, o hub recusa e oferece um resumo.
+- **Pronto para o público.** No modo público, envios grandes são cortados enquanto chegam, cada visitante tem limites, as análises entram numa fila e o SQL do usuário não lê arquivos do servidor.
+- **Rápido.** Na máquina de desenvolvimento, a análise completa de 1 milhão de linhas leva 10 segundos, e a de 10 milhões, 1 minuto.
+- **Testado.** 239 testes, com dados fabricados que trazem o gabarito do que foi plantado.
+
+**Pilha:** Python, DuckDB e FastAPI no motor e na API; Next.js, React, AG Grid, React Flow, CodeMirror e ECharts na interface.
+
+| Normalização | Tema claro |
+|---|---|
+| ![A receita de limpeza passo a passo](docs/imagens/normalizacao.png) | ![O painel no tema claro](docs/imagens/painel-claro.png) |
+
+Uma sessão pode ter várias tabelas: arquivos, abas do Excel, consultas salvas e arquivos empilhados. As cotações são do Banco Central Europeu e ficam em `engine/dados/`.
 
 ## Blocos da engine
 
@@ -83,6 +116,10 @@ Para abrir o hub (API na porta 8000 e interface na 3000):
 ```
 
 Depois acesse http://localhost:3000. `Ctrl+C` encerra tudo.
+
+Para rodar num endereço só, como no Codespaces, use `./servir.sh` (porta 8000).
+
+Para montar o executável do seu sistema: exporte a interface (`cd web && DATAHUB_EXPORTAR=1 NEXT_PUBLIC_API_URL= npm run build`), instale o PyInstaller e rode `pyinstaller datahub.spec`. O GitHub Actions faz isso para Windows, macOS e Linux a cada versão marcada com `git tag v…`.
 
 Para atualizar as cotações de câmbio:
 
