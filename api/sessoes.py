@@ -86,7 +86,10 @@ def salvar_estado(sessao: str, estado: dict) -> None:
 
 
 def salvar_json(caminho: Path, dados) -> None:
-    caminho.write_text(json.dumps(jsonable_encoder(dados), ensure_ascii=False, indent=1), encoding="utf-8")
+    """Grava num arquivo ao lado e troca de uma vez: quem lê nunca pega o JSON pela metade."""
+    temporario = caminho.with_name(f".{caminho.name}.{secrets.token_hex(4)}")
+    temporario.write_text(json.dumps(jsonable_encoder(dados), ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(temporario, caminho)
 
 
 def apagar(sessao: str) -> None:

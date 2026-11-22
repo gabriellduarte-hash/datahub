@@ -16,21 +16,23 @@ const POR_PAGINA = 100;
 
 /* Destaque em 1-bit: palavra-chave em negrito, texto em itálico, comentário apagado. */
 const DESTAQUE = HighlightStyle.define([
-  { tag: tags.keyword, fontWeight: "700" },
+  { tag: tags.keyword, color: "var(--destaque-texto)" },
   { tag: [tags.string, tags.special(tags.string)], fontStyle: "italic" },
   { tag: tags.comment, color: "var(--tinta-suave)" },
   { tag: tags.number, textDecoration: "underline dotted" },
 ]);
 
 const VISUAL = EditorView.theme({
-  "&": { backgroundColor: "var(--papel)", color: "var(--tinta)", border: "2px solid var(--tinta)", fontSize: "13px" },
-  ".cm-content": { fontFamily: "var(--fonte-mono)", caretColor: "var(--tinta)", minHeight: "120px" },
-  ".cm-gutters": { backgroundColor: "var(--papel)", color: "var(--tinta-suave)", borderRight: "2px solid var(--tinta)" },
-  "&.cm-focused": { outline: "3px solid var(--destaque)", outlineOffset: "2px" },
+  "&": { backgroundColor: "var(--papel)", color: "var(--tinta)", border: "1px solid var(--linha)", borderRadius: "8px", fontSize: "13px" },
+  ".cm-scroller": { borderRadius: "8px" },
+  ".cm-content": { fontFamily: "var(--fonte-mono)", caretColor: "var(--destaque-texto)", minHeight: "120px", padding: "10px 0" },
+  ".cm-gutters": { backgroundColor: "var(--papel)", color: "var(--tinta-fraca)", borderRight: "1px solid var(--linha)", borderRadius: "8px 0 0 8px" },
+  "&.cm-focused": { outline: "none", borderColor: "var(--linha-forte)" },
   ".cm-activeLine": { backgroundColor: "transparent" },
+  ".cm-cursor": { borderLeftColor: "var(--destaque-texto)" },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": { backgroundColor: "var(--destaque-fraco)" },
-  ".cm-tooltip": { border: "2px solid var(--tinta)", backgroundColor: "var(--papel)", boxShadow: "3px 3px 0 var(--tinta)" },
-  ".cm-tooltip-autocomplete ul li[aria-selected]": { backgroundColor: "var(--tinta)", color: "var(--papel)" },
+  ".cm-tooltip": { border: "1px solid var(--linha-forte)", backgroundColor: "var(--papel-2)", borderRadius: "6px" },
+  ".cm-tooltip-autocomplete ul li[aria-selected]": { backgroundColor: "var(--destaque)", color: "var(--sobre-destaque)" },
 });
 
 type Props = {

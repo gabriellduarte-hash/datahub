@@ -10,7 +10,7 @@ from pathlib import Path
 
 import duckdb
 
-from engine import graficos, insights, normalizacao
+from engine import graficos, insights, normalizacao, painel
 from engine.leitura import ArquivoInvalido, ler
 from engine.limites import LOCAL, LimiteExcedido, Limites
 from engine.normalizacao import Relatorio, ResultadoPasso
@@ -119,10 +119,21 @@ def analisar(con: duckdb.DuckDBPyConnection, tabela: str, unidades: dict[str, st
         lambda: insights.gerar(con, tabela, perfil, unidades, limites, relatorio, derivadas),
         estados,
     )
+    # O painel: cada insight com o gráfico do dado que ele cita, e os números do topo.
+    if resultado_insights:
+        try:
+            painel.anexar_graficos(con, tabela, unidades, resultado_insights.insights, limites)
+        except duckdb.Error:
+            pass
+    try:
+        resumo = painel.resumo(con, tabela, perfil, unidades)
+    except duckdb.Error:
+        resumo = []
     return {
         "blocos": _lista(estados),
         "perfil_limpo": asdict(perfil),
         "unidades": unidades,
+        "resumo": resumo,
         "graficos": [asdict(g) for g in lista_graficos or []],
         "insights": asdict(resultado_insights) if resultado_insights else None,
     }

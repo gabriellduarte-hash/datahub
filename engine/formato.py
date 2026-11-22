@@ -51,3 +51,19 @@ def periodo(dia: date, grao: str) -> str:
     if grao == "semana":
         return f"semana de {dia.strftime('%d/%m/%Y')}"
     return dia.strftime("%d/%m/%Y")
+
+
+def compacto(numero_bruto: float, unidade: str | None = None) -> str:
+    """Para os números grandes do painel: 9.321.770,80 vira "9,32 mi"."""
+    absoluto = abs(numero_bruto)
+    for limite, sufixo in ((1e9, " bi"), (1e6, " mi"), (1e4, " mil")):
+        if absoluto >= limite:
+            texto = numero(numero_bruto / limite, 2 if absoluto < limite * 100 else 1) + sufixo
+            break
+    else:
+        texto = inteiro(numero_bruto) if float(numero_bruto).is_integer() else numero(numero_bruto)
+    if unidade == "BRL":
+        return f"R$ {texto}"
+    if unidade == "%":
+        return f"{texto}%"
+    return texto

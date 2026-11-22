@@ -12,8 +12,15 @@ async function pedir<T>(caminho: string, opcoes?: RequestInit): Promise<T> {
     throw new Error("Não consegui falar com a API. Ela está rodando na porta 8000?");
   }
   const dados = await resposta.json().catch(() => null);
-  if (!resposta.ok) throw new Error(dados?.erro ?? "A API devolveu um erro inesperado.");
+  if (!resposta.ok) throw new ErroApi(dados?.erro ?? "A API devolveu um erro inesperado.", resposta.status);
   return dados as T;
+}
+
+/* Erro com o status HTTP, para separar "a sessão não existe" (404) de uma falha passageira. */
+export class ErroApi extends Error {
+  constructor(mensagem: string, readonly status: number) {
+    super(mensagem);
+  }
 }
 
 function enviarJson<T>(caminho: string, corpo: unknown, metodo = "POST"): Promise<T> {

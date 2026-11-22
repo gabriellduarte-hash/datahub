@@ -48,7 +48,7 @@ export function Hub() {
   const [selecao, setSelecao] = useState<Set<string>>(new Set());
   const [ocupado, setOcupado] = useState<{ texto: string; fracao?: number } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [tema, setTema] = useState("sistema");
+  const [tema, setTema] = useState("dark");
 
   const ativa = useMemo(() => area?.tabelas.find((t) => t.id === area.ativa) ?? null, [area]);
 
@@ -92,12 +92,16 @@ export function Hub() {
         const tabela = resposta.tabelas.find((t) => t.id === resposta.ativa);
         setEtapa(tabela?.relatorio ? "sandbox" : "triagem");
       })
-      .catch(() => lembrar(CHAVE_SESSAO, null));
+      .catch((falha) => {
+        /* Só esquece a sessão se ela não existe mais; se a API só não respondeu, guarda para a próxima vez. */
+        if (falha instanceof api.ErroApi && falha.status === 404) lembrar(CHAVE_SESSAO, null);
+        else setErro((falha as Error).message);
+      });
   }, [receber]);
 
+  /* O hub nasce escuro; o tema claro fica guardado no navegador de quem escolheu. */
   const inverter = () => {
-    const escuro = tema === "dark" || (tema === "sistema" && matchMedia("(prefers-color-scheme: dark)").matches);
-    const novo = escuro ? "light" : "dark";
+    const novo = tema === "light" ? "dark" : "light";
     setTema(novo);
     document.documentElement.dataset.theme = novo;
     lembrar(CHAVE_TEMA, novo);
@@ -182,18 +186,18 @@ export function Hub() {
   return (
     <>
       <header className="menu">
-        <span className="logo">datahub</span>
+        <span className="logo"><span className="logo-marca" aria-hidden="true" />datahub</span>
         <nav className="etapas" aria-label="Etapas">
           {ETAPAS.map((item, indice) => (
             <button key={item.id} type="button" className="etapa" disabled={!liberada(item.id)}
                     aria-current={etapa === item.id ? "step" : undefined} onClick={() => setEtapa(item.id)}>
-              <span className="etapa-num">{indice + 1}</span> {item.nome}
+              <span className="etapa-num">{String(indice + 1).padStart(2, "0")}</span>{item.nome}
             </button>
           ))}
         </nav>
         <div className="menu-acoes">
           {area ? <button type="button" className="botao pequeno" onClick={novaSessao}>Nova sessão</button> : null}
-          <button type="button" className="botao pequeno" onClick={inverter}>Inverter</button>
+          <button type="button" className="botao pequeno" onClick={inverter}>{tema === "light" ? "Tema escuro" : "Tema claro"}</button>
         </div>
       </header>
 
@@ -220,6 +224,10 @@ export function Hub() {
       ) : null}
 
       <main className={`conteudo${etapa === "sandbox" && area ? " largo" : ""}`}>
+        <div className="cantos">
+          <span>{String(ETAPAS.findIndex((e) => e.id === etapa) + 1).padStart(2, "0")} · {ETAPAS.find((e) => e.id === etapa)?.nome}</span>
+          <span>{ativa ? `${ativa.nome} · ${ativa.arquivo.linhas.toLocaleString("pt-BR")} linhas` : "nenhum arquivo ainda"}</span>
+        </div>
         {ocupado ? (
           <div className="processando" role="status">
             <span className="barra-ascii pulsar">{barraAscii(ocupado.fracao ?? 0.5)}</span>

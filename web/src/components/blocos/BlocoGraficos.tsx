@@ -39,7 +39,7 @@ export function CartaoGrafico({ original, sessao, analise, tema }: PropsCartao) 
   const id = `${original.id}-${original.titulo}`.replace(/[^\w-]/g, "_");
 
   return (
-    <Janela titulo={grafico.titulo} nivel={3}>
+    <Janela titulo={grafico.titulo} nivel={3} extra={<span className="tag">{grafico.tipo}</span>}>
       <GraficoEcharts grafico={grafico} tema={tema} />
       {grafico.aviso ? <p className="grafico-nota">! {grafico.aviso}</p> : null}
       {erro ? <p className="grafico-nota">! {erro}</p> : null}
@@ -75,31 +75,5 @@ export function CartaoGrafico({ original, sessao, analise, tema }: PropsCartao) 
         </div>
       ) : null}
     </Janela>
-  );
-}
-
-/* A coluna de gráficos ao lado da planilha. */
-export function PainelGraficos({ sessao, analise, tema }: { sessao: string; analise: Analise | null; tema: string }) {
-  if (!analise) {
-    return (
-      <Janela titulo="Gráficos" nivel={3}>
-        <p className="texto-suave">Os gráficos aparecem quando há uma base de análise.</p>
-      </Janela>
-    );
-  }
-  if (!analise.graficos.length) {
-    return (
-      <Janela titulo="Gráficos" nivel={3}>
-        <p className="texto-suave">Nenhum gráfico faz sentido com os papéis atuais. Marque ao menos uma métrica, categoria ou data no perfil.</p>
-      </Janela>
-    );
-  }
-  const chave = `${analise.rotulo}-${analise.linhas}`;
-  return (
-    <>
-      {analise.graficos.map((grafico) => (
-        <CartaoGrafico key={`${chave}-${grafico.id}-${grafico.titulo}`} original={grafico} sessao={sessao} analise={analise} tema={tema} />
-      ))}
-    </>
   );
 }

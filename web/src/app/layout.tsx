@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, VT323 } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const mono = JetBrains_Mono({ variable: "--fonte-mono", subsets: ["latin"] });
-const pixel = VT323({ variable: "--fonte-pixel", subsets: ["latin"], weight: "400" });
+const sans = Geist({ variable: "--fonte-sans", subsets: ["latin"] });
+const mono = Geist_Mono({ variable: "--fonte-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "datahub",
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="pt-BR" className={`${mono.variable} ${pixel.variable}`}>
+    <html lang="pt-BR" className={`${sans.variable} ${mono.variable}`}>
       <body>{children}</body>
     </html>
   );

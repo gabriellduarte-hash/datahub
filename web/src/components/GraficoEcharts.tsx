@@ -10,54 +10,58 @@ import type { Grafico } from "@/lib/tipos";
 
 echarts.use([BarChart, LineChart, ScatterChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
-type Cores = { tinta: string; suave: string; papel: string; destaque: string };
+type Cores = { tinta: string; suave: string; fraca: string; papel: string; destaque: string; linha: string; trilho: string; mono: string };
 
 function lerCores(): Cores {
   const estilo = getComputedStyle(document.documentElement);
   const cor = (nome: string) => estilo.getPropertyValue(nome).trim();
-  return { tinta: cor("--tinta"), suave: cor("--tinta-suave"), papel: cor("--papel"), destaque: cor("--destaque") };
+  return {
+    tinta: cor("--tinta"), suave: cor("--tinta-suave"), fraca: cor("--tinta-fraca"), papel: cor("--papel"),
+    destaque: cor("--destaque-grafico"), linha: cor("--linha"), trilho: cor("--trilho"),
+    mono: getComputedStyle(document.body).fontFamily || "monospace",
+  };
 }
 
-/* Em 1-bit, o preenchimento é um padrão pontilhado e não uma cor. */
-const pontilhado = (cor: string) => ({ symbol: "rect", symbolSize: 1, dashArrayX: [1, 2], dashArrayY: [1, 2], color: cor });
-const hachura = (cor: string) => ({ symbol: "rect", symbolSize: 1, dashArrayX: [1, 0], dashArrayY: [1, 3], rotation: Math.PI / 4, color: cor });
-
-function opcoes(grafico: Grafico, c: Cores) {
+/* Monocromia com um destaque: o grupo ou período que o insight cita fica verde,
+   o resto fica em branco sobre um trilho cinza, como uma régua. */
+function opcoes(grafico: Grafico, c: Cores, destaque: string | null, compacto: boolean) {
+  const texto = { color: c.suave, fontFamily: c.mono, fontSize: compacto ? 10 : 10.5 };
   const eixoBase = {
-    axisLine: { lineStyle: { color: c.tinta, width: 2 } },
-    axisTick: { lineStyle: { color: c.tinta, width: 2 } },
-    axisLabel: { color: c.tinta, fontFamily: "monospace", fontSize: 11 },
+    axisLine: { lineStyle: { color: c.linha } },
+    axisTick: { show: false },
+    axisLabel: { ...texto },
     splitLine: { show: false },
   };
   const eixoValor = {
     ...eixoBase,
     type: "value" as const,
-    splitNumber: 4,
-    axisLabel: { ...eixoBase.axisLabel, hideOverlap: true, formatter: (v: number) => fmtEixo(v, grafico.unidade) },
-    splitLine: { show: true, lineStyle: { color: c.tinta, opacity: 0.25, type: "dotted" as const } },
+    splitNumber: compacto ? 3 : 4,
+    axisLine: { show: false },
+    axisLabel: { ...texto, hideOverlap: true, formatter: (v: number) => fmtEixo(v, grafico.unidade) },
+    splitLine: { show: true, lineStyle: { color: c.linha, type: "dashed" as const } },
   };
   const base = {
     animation: false,
-    textStyle: { fontFamily: "monospace", color: c.tinta },
-    grid: { left: 8, right: 16, top: 16, bottom: 8, containLabel: true },
+    textStyle: { fontFamily: c.mono, color: c.tinta },
+    grid: { left: 4, right: compacto ? 44 : 56, top: 10, bottom: 4, containLabel: true },
     tooltip: {
       backgroundColor: c.papel,
-      borderColor: c.tinta,
-      borderWidth: 2,
-      borderRadius: 0,
-      textStyle: { color: c.tinta, fontFamily: "monospace", fontSize: 12 },
-      extraCssText: `box-shadow: 3px 3px 0 ${c.tinta}; border-radius: 0;`,
+      borderColor: c.linha,
+      borderWidth: 1,
+      padding: [6, 9],
+      textStyle: { color: c.tinta, fontFamily: c.mono, fontSize: 11.5 },
+      extraCssText: "border-radius: 6px; box-shadow: none;",
     },
   };
 
   if (grafico.tipo === "dispersao") {
     return {
       ...base,
-      grid: { ...base.grid, bottom: 26 },
+      grid: { ...base.grid, right: 12, bottom: 22 },
       tooltip: { ...base.tooltip, trigger: "item" as const, formatter: (p: { value: number[] }) => `${grafico.x}: ${fmtValor(p.value[0], null)}<br>${grafico.y}: ${fmtValor(p.value[1], grafico.unidade)}` },
-      xAxis: { ...eixoValor, axisLabel: { ...eixoValor.axisLabel, formatter: (v: number) => fmtEixo(v, null) }, name: grafico.x ?? "", nameLocation: "middle" as const, nameGap: 24, nameTextStyle: { color: c.tinta } },
+      xAxis: { ...eixoValor, axisLabel: { ...eixoValor.axisLabel, formatter: (v: number) => fmtEixo(v, null) }, name: grafico.x ?? "", nameLocation: "middle" as const, nameGap: 20, nameTextStyle: { ...texto } },
       yAxis: eixoValor,
-      series: [{ type: "scatter", symbol: "rect", symbolSize: 4, data: grafico.dados.map((d) => [d.x, d.y]), itemStyle: { color: c.tinta, opacity: 0.7 } }],
+      series: [{ type: "scatter", symbol: "circle", symbolSize: compacto ? 3 : 4, data: grafico.dados.map((d) => [d.x, d.y]), itemStyle: { color: c.tinta, opacity: 0.55 } }],
     };
   }
 
@@ -77,55 +81,85 @@ function opcoes(grafico: Grafico, c: Cores) {
     const fim = ultimoIncompleto ? grafico.dados.length - 1 : grafico.dados.length;
     const firmes = valores.map((v, i) => (i < fim ? v : null));
     const finais = valores.map((v, i) => (i >= fim - 1 && ultimoIncompleto ? v : null));
+    const marcado = destaque ? rotulos.indexOf(destaque) : -1;
     return {
       ...base,
-      tooltip: { ...base.tooltip, trigger: "axis" as const, axisPointer: { type: "line" as const, lineStyle: { color: c.tinta, type: "dashed" as const } }, formatter: dicas },
-      xAxis: { ...eixoBase, type: "category" as const, data: rotulos, boundaryGap: false, axisLabel: { ...eixoBase.axisLabel, hideOverlap: true } },
+      grid: { ...base.grid, right: 12 },
+      tooltip: { ...base.tooltip, trigger: "axis" as const, axisPointer: { type: "line" as const, lineStyle: { color: c.linha, type: "dashed" as const } }, formatter: dicas },
+      xAxis: { ...eixoBase, type: "category" as const, data: rotulos, boundaryGap: false, axisLabel: { ...texto, hideOverlap: true } },
       yAxis: eixoValor,
       series: [
-        { type: "line", data: firmes, symbol: "rect", symbolSize: 6, lineStyle: { color: c.tinta, width: 2 }, itemStyle: { color: c.tinta }, areaStyle: { color: c.papel, decal: pontilhado(c.tinta) } },
-        { type: "line", data: finais, symbol: "rect", symbolSize: 6, lineStyle: { color: c.tinta, width: 2, type: "dashed" as const }, itemStyle: { color: c.papel, borderColor: c.tinta, borderWidth: 2 } },
+        {
+          type: "line", data: firmes, symbol: "circle", showSymbol: false, lineStyle: { color: c.tinta, width: 1.5 },
+          itemStyle: { color: c.tinta },
+          areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: c.trilho }, { offset: 1, color: "rgba(0,0,0,0)" }]) },
+          markPoint: marcado >= 0 && marcado < fim ? {
+            symbol: "circle", symbolSize: 9, label: { show: false },
+            itemStyle: { color: c.destaque, borderColor: c.papel, borderWidth: 2 },
+            data: [{ coord: [marcado, valores[marcado]] }],
+          } : undefined,
+        },
+        { type: "line", data: finais, symbol: "circle", symbolSize: 5, lineStyle: { color: c.suave, width: 1.5, type: "dashed" as const }, itemStyle: { color: c.papel, borderColor: c.suave, borderWidth: 1.5 } },
       ],
     };
   }
 
-  const horizontal = grafico.tipo === "barras";
+  if (grafico.tipo === "histograma") {
+    return {
+      ...base,
+      grid: { ...base.grid, right: 8 },
+      tooltip: { ...base.tooltip, trigger: "axis" as const, axisPointer: { type: "shadow" as const, shadowStyle: { color: c.trilho } }, formatter: dicas },
+      xAxis: { ...eixoBase, type: "category" as const, data: grafico.dados.map((d) => String(d.x)), axisLabel: { ...texto, hideOverlap: true } },
+      yAxis: { ...eixoValor, axisLabel: { ...eixoValor.axisLabel, formatter: (v: number) => fmtEixo(v, null) } },
+      series: [{ type: "bar", barCategoryGap: "18%", data: grafico.dados.map((d) => d.y), itemStyle: { color: c.suave, borderRadius: [2, 2, 0, 0] } }],
+    };
+  }
+
+  /* Barras deitadas, uma régua por grupo, com o valor na ponta. */
   const nomes = grafico.dados.map((d) => String(d.x));
-  const barras = {
-    type: "bar",
-    barCategoryGap: horizontal ? "28%" : "6%",
-    data: grafico.dados.map((d, i) => ({
-      value: d.y,
-      itemStyle: {
-        color: c.papel,
-        borderColor: c.tinta,
-        borderWidth: 2,
-        decal: d.outros ? hachura(c.tinta) : i === 0 && horizontal ? { ...pontilhado(c.tinta), dashArrayX: [1, 0], dashArrayY: [1, 0] } : pontilhado(c.tinta),
-      },
-    })),
-  };
-  const eixoCategorias = { ...eixoBase, type: "category" as const, data: nomes, axisLabel: { ...eixoBase.axisLabel, hideOverlap: true, width: 130, overflow: "truncate" as const } };
+  const realce = destaque && nomes.includes(destaque) ? destaque : nomes[0];
   return {
     ...base,
-    tooltip: { ...base.tooltip, trigger: "axis" as const, axisPointer: { type: "shadow" as const, shadowStyle: { color: c.tinta, opacity: 0.08 } }, formatter: dicas },
-    xAxis: horizontal ? eixoValor : eixoCategorias,
-    yAxis: horizontal ? { ...eixoCategorias, inverse: true } : { ...eixoValor, axisLabel: { ...eixoValor.axisLabel, formatter: (v: number) => fmtEixo(v, null) } },
-    series: [barras],
+    tooltip: { ...base.tooltip, trigger: "axis" as const, axisPointer: { type: "shadow" as const, shadowStyle: { color: c.trilho } }, formatter: dicas },
+    xAxis: { ...eixoValor, show: !compacto },
+    yAxis: {
+      ...eixoBase, type: "category" as const, data: nomes, inverse: true, axisLine: { show: false },
+      axisLabel: { ...texto, color: c.tinta, hideOverlap: true, width: compacto ? 110 : 140, overflow: "truncate" as const },
+    },
+    series: [{
+      type: "bar",
+      barWidth: compacto ? 8 : 11,
+      showBackground: true,
+      backgroundStyle: { color: c.trilho, borderRadius: 2 },
+      label: {
+        show: grafico.dados.length <= 12, position: "right" as const, color: c.tinta, fontFamily: c.mono, fontSize: 10.5,
+        formatter: (p: { value: number }) => fmtValor(p.value, grafico.unidade),
+      },
+      data: grafico.dados.map((d) => ({
+        value: d.y,
+        itemStyle: { color: d.outros ? c.fraca : String(d.x) === realce ? c.destaque : c.tinta, borderRadius: 2 },
+      })),
+    }],
   };
 }
 
-export function GraficoEcharts({ grafico, tema }: { grafico: Grafico; tema: string }) {
+type Props = { grafico: Grafico; tema: string; destaque?: string | null; compacto?: boolean };
+
+export function GraficoEcharts({ grafico, tema, destaque = null, compacto = false }: Props) {
   const area = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!area.current) return;
     const instancia = echarts.init(area.current);
-    instancia.setOption(opcoes(grafico, lerCores()) as echarts.EChartsCoreOption);
+    instancia.setOption(opcoes(grafico, lerCores(), destaque, compacto) as echarts.EChartsCoreOption);
     const observador = new ResizeObserver(() => instancia.resize());
     observador.observe(area.current);
     return () => { observador.disconnect(); instancia.dispose(); };
-  }, [grafico, tema]);
+  }, [grafico, tema, destaque, compacto]);
 
-  return <div ref={area} className="grafico-area" role="img" aria-label={grafico.titulo} />;
+  /* Barras deitadas crescem com o número de grupos: duas barras não pedem a mesma altura que doze. */
+  const deitadas = grafico.tipo === "barras";
+  const altura = deitadas ? Math.max(compacto ? 70 : 200, grafico.dados.length * (compacto ? 28 : 48) + (compacto ? 14 : 40)) : undefined;
+  return <div ref={area} className={`grafico-area${compacto ? " compacto" : ""}`} style={altura ? { height: altura } : undefined}
+              role="img" aria-label={grafico.titulo} />;
 }
-

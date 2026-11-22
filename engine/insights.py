@@ -65,6 +65,22 @@ class Insight:
     evidencias: list[dict] = field(default_factory=list)   # {"rotulo": ..., "valor": ...}
     ressalvas: list[str] = field(default_factory=list)
     colunas: list[str] = field(default_factory=list)
+    # Para o painel: o gráfico do dado que o insight cita, o grupo ou período a
+    # destacar nele e o número que resume o achado.
+    grafico: dict | None = None
+    destaque: str | None = None
+    numero: str | None = None
+
+
+def _com(insight: Insight, grafico: dict | None, destaque, numero: str | None) -> Insight:
+    """Acrescenta ao insight o que o painel mostra junto dele."""
+    insight.grafico, insight.numero = grafico, numero
+    insight.destaque = None if destaque is None else str(destaque)
+    return insight
+
+
+def _sinal(fracao: float) -> str:
+    return f"{'+' if fracao >= 0 else '−'}{formato.pct(abs(fracao))}"
 
 
 @dataclass
@@ -328,8 +344,8 @@ def variacao_periodo(ctx):
                 evidencias.append({"rotulo": f"Diferença em {nome}", "valor": ctx.valor(delta, metrica.nome)})
                 colunas.append(categoria)
 
-        yield Insight("variacao_periodo", f"{metrica.nome} {verbo} em {nome_atual}", texto,
-                      min(100, 55 + abs(variacao) * 60), evidencias, ressalvas, colunas)
+        yield _com(Insight("variacao_periodo", f"{metrica.nome} {verbo} em {nome_atual}", texto,
+                      min(100, 55 + abs(variacao) * 60), evidencias, ressalvas, colunas), {"tipo": "linha", "x": ctx.datas[0].nome, "y": metrica.nome, "agregacao": metrica.agregacao, "grao": grao}, nome_atual, _sinal(variacao))
 
 
 def _volume_explica(razao_valor: float, razao_linhas: float) -> bool:
@@ -384,7 +400,7 @@ def tendencia(ctx):
             continue
 
         direcao = "cresce" if relativa > 0 else "cai"
-        yield Insight(
+        yield _com(Insight(
             "tendencia", f"{metrica.nome} {direcao} de forma consistente",
             f"{metrica.nome} {direcao} em média {ctx.valor(abs(inclinacao), metrica.nome)} por {formato.NOME_GRAO[grao]} "
             f"({formato.pct(abs(relativa))} da média), ao longo de {n} períodos.",
@@ -396,7 +412,7 @@ def tendencia(ctx):
             ],
             ["Uma tendência passada não garante o futuro."],
             [ctx.datas[0].nome, metrica.nome],
-        )
+        ), {"tipo": "linha", "x": ctx.datas[0].nome, "y": metrica.nome, "agregacao": metrica.agregacao, "grao": grao}, None, f"{_sinal(relativa)} por {formato.NOME_GRAO[grao]}")
 
 
 def _regressao(ys: list[float]) -> tuple[float, float]:
@@ -454,8 +470,8 @@ def pico_temporal(ctx):
             ressalvas.append("Confira se esse valor é real. Sem ele, o período fica normal.")
             evidencias.append({"rotulo": "Maior linha do período", "valor": ctx.valor(maior, metrica.nome)})
             score = 38
-        yield Insight("pico_temporal", f"{'Salto' if acima else 'Queda'} em {nome}", texto, score,
-                      evidencias, ressalvas, [ctx.datas[0].nome, metrica.nome])
+        yield _com(Insight("pico_temporal", f"{'Salto' if acima else 'Queda'} em {nome}", texto, score,
+                      evidencias, ressalvas, [ctx.datas[0].nome, metrica.nome]), {"tipo": "linha", "x": ctx.datas[0].nome, "y": metrica.nome, "agregacao": metrica.agregacao, "grao": grao}, nome, _sinal(desvio))
 
 
 def _picos(ctx, metrica):
@@ -542,7 +558,7 @@ def concentracao(ctx):
             pelo_volume = fatia_linhas >= 0.8 * fatia
             if pelo_volume:
                 texto += f" Também é onde estão {formato.pct(fatia_linhas)} das linhas: a fatia vem do volume de registros."
-            yield Insight(
+            yield _com(Insight(
                 "concentracao", f"{nome} concentra {metrica.nome}", texto,
                 min(85, 40 + (fatia - justa) * 90) - (10 if pelo_volume else 0),
                 [
@@ -553,7 +569,7 @@ def concentracao(ctx):
                 ],
                 [],
                 [categoria.nome, metrica.nome],
-            )
+            ), {"tipo": "barras", "x": categoria.nome, "y": metrica.nome, "agregacao": "soma"}, lider, formato.pct(fatia))
 
 
 def _concentracao_de_linhas(ctx):
@@ -578,7 +594,7 @@ def _concentracao_de_linhas(ctx):
         texto = f"{nome} tem {formato.pct(fatia)} das linhas, em {grupos} grupos."
         if quantos < grupos * 0.6:
             texto += f" {quantos} de {grupos} grupos somam 80% das linhas."
-        yield Insight(
+        yield _com(Insight(
             "concentracao", f"{nome} concentra as linhas", texto,
             min(75, 35 + (fatia - justa) * 80),
             [
@@ -588,7 +604,7 @@ def _concentracao_de_linhas(ctx):
             ],
             [],
             [categoria.nome],
-        )
+        ), {"tipo": "barras", "x": categoria.nome, "y": None, "agregacao": "contagem"}, lider, formato.pct(fatia))
 
 
 @analisador("diferenca_entre_grupos", _precisa_categoria)
@@ -647,7 +663,7 @@ def diferenca_entre_grupos(ctx):
             ressalvas = []
             if amostrada:
                 ressalvas.append(f"Calculado sobre uma amostra de {formato.inteiro(limite)} linhas.")
-            yield Insight(
+            yield _com(Insight(
                 "diferenca_entre_grupos", f"{grupo} foge do típico em {metrica.nome}",
                 f"O valor típico de {metrica.nome} em {grupo} é {ctx.valor(mediana, metrica.nome)}, "
                 f"{formato.pct(diferenca)} {direcao} do típico geral "
@@ -660,7 +676,7 @@ def diferenca_entre_grupos(ctx):
                 ],
                 ressalvas,
                 [categoria, metrica.nome],
-            )
+            ), {"tipo": "barras", "x": categoria, "y": metrica.nome, "agregacao": "mediana"}, nome, ctx.valor(mediana, metrica.nome))
 
 
 # ----- colunas de sim/não -----
@@ -780,11 +796,11 @@ def taxa_por_grupo(ctx):
         ressalvas = ["Uma diferença entre grupos não prova que o grupo causa o resultado."]
         if amostrada:
             ressalvas.append(f"Calculado sobre uma amostra de {formato.inteiro(ctx.limites.linhas_amostra)} linhas.")
-        yield Insight(
+        yield _com(Insight(
             "taxa_por_grupo", f"{nome} muda conforme {grupo}", texto,
             min(90, 50 + 100 * v) if alvo else min(75, 40 + 80 * v),
             evidencias, ressalvas, [nome, grupo],
-        )
+        ), {"tipo": "barras", "x": grupo, "y": nome, "agregacao": "taxa"}, ordenados[0][0], formato.pct(ordenados[0][2]))
 
 
 @analisador("metrica_por_indicador", _precisa_indicador_e_metrica)
@@ -839,7 +855,7 @@ def metrica_por_indicador(ctx):
         ressalvas = ["Uma diferença entre grupos não prova que uma coisa causa a outra."]
         if amostrada:
             ressalvas.append(f"Calculado sobre uma amostra de {formato.inteiro(ctx.limites.linhas_amostra)} linhas.")
-        yield Insight(
+        yield _com(Insight(
             "metrica_por_indicador", f"{metrica.nome} é {direcao} quando {sim.sim}",
             f"O valor típico de {metrica.nome} é {ctx.valor(m1, metrica.nome)} quando {sim.sim}, "
             f"contra {ctx.valor(m0, metrica.nome)} quando {sim.nao}.",
@@ -850,7 +866,7 @@ def metrica_por_indicador(ctx):
             ],
             ressalvas,
             [nome, metrica.nome],
-        )
+        ), {"tipo": "barras", "x": nome, "y": metrica.nome, "agregacao": "mediana"}, sim.sim.split(" = ", 1)[1] if " = " in sim.sim else None, ctx.valor(m1, metrica.nome))
 
 
 # ----- valores fora do padrão e relações -----
@@ -876,7 +892,7 @@ def valores_extremos(ctx):
         ressalvas = ["Confira se são erros de digitação antes de removê-los."]
         if amostrada:
             ressalvas.append(f"Calculado sobre uma amostra de {formato.inteiro(ctx.limites.linhas_amostra)} linhas.")
-        yield Insight(
+        yield _com(Insight(
             "valores_extremos", f"Valores fora do padrão em {metrica.nome}",
             f"{_valores(fora)} de {metrica.nome} {'foge' if fora == 1 else 'fogem'} muito do padrão: "
             f"{'é' if fora == 1 else 'o maior é'} {ctx.valor(maior, metrica.nome)}, "
@@ -889,7 +905,7 @@ def valores_extremos(ctx):
             ],
             ressalvas,
             [metrica.nome],
-        )
+        ), {"tipo": "histograma", "x": None, "y": metrica.nome}, None, formato.inteiro(fora))
 
 
 @analisador("correlacao", _precisa_duas_metricas)
@@ -925,7 +941,7 @@ def correlacao(ctx):
         ressalvas = ["Correlação não prova que uma coisa causa a outra."]
         if amostrada:
             ressalvas.append(f"Calculado sobre uma amostra de {formato.inteiro(limite)} linhas.")
-        yield Insight(
+        yield _com(Insight(
             "correlacao", f"{a} e {b} andam juntas",
             f"Quando {a} sobe, {b} tende a {'subir' if sentido == 'sobe' else 'cair'} "
             f"(correlação de {formato.numero(rho)}).",
@@ -936,7 +952,7 @@ def correlacao(ctx):
             ],
             ressalvas,
             [a, b],
-        )
+        ), {"tipo": "dispersao", "x": a, "y": b}, None, formato.numero(rho))
 
 
 # ----- qualidade -----

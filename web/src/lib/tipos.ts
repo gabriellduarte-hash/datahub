@@ -112,7 +112,12 @@ export type Insight = {
   evidencias: { rotulo: string; valor: string }[];
   ressalvas: string[];
   colunas: string[];
+  grafico: Grafico | null;
+  destaque: string | null;
+  numero: string | null;
 };
+
+export type ItemResumo = { icone: string; rotulo: string; valor: string };
 
 export type Execucao = {
   analisador: string;
@@ -151,6 +156,7 @@ export type Analise = {
   blocos: EstadoBloco[];
   perfil_limpo: Perfil;
   unidades: Record<string, string>;
+  resumo: ItemResumo[];
   graficos: Grafico[];
   insights: { insights: Insight[]; execucoes: Execucao[] } | null;
 };

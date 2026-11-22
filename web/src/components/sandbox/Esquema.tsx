@@ -18,8 +18,8 @@ function NoTabela({ data }: NodeProps<Node<DadosNo>>) {
   return (
     <div className={`no-tabela${base ? " base" : ""}`}>
       <Handle type="target" position={Position.Left} />
-      <div className="no-barra"><strong>{tabela.nome}</strong></div>
-      <div className="no-info">{fmtInteiro(tabela.linhas)} linhas{tabela.normalizada ? "" : " · sem normalizar"}</div>
+      <span className="no-tag">{tabela.nome}</span>
+      <div className="no-info">{fmtInteiro(tabela.linhas)} linhas · {tabela.normalizada ? "normalizada" : "sem normalizar"}</div>
       <ul>
         {tabela.colunas.slice(0, 14).map((coluna) => (
           <li key={coluna.nome}>
@@ -108,12 +108,12 @@ export function Esquema({ area, ocupado, aoMudar, executar }: Props) {
           edges={arestas}
           nodeTypes={TIPOS_DE_NO}
           fitView
-          fitViewOptions={{ padding: 0.15 }}
+          fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
           proOptions={{ hideAttribution: true }}
           nodesConnectable={false}
           minZoom={0.3}
         >
-          <Background variant={BackgroundVariant.Dots} gap={14} size={1.2} />
+          <Background variant={BackgroundVariant.Lines} gap={32} lineWidth={1} />
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>

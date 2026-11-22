@@ -115,3 +115,18 @@ def test_jeitos_de_escrever_sim_e_nao(valores, sim):
     leitura = expressao_sim(con, "t", "x")
     assert leitura.sim == sim
     assert con.execute(f"SELECT sum({leitura.expressao}) FROM t").fetchone()[0] == 2 - (valores[0] == "SIM")
+
+
+def test_painel_traz_cada_insight_com_o_seu_grafico(churn):
+    """No painel, o insight do cancelamento vem com as barras por contrato e o mensal em destaque."""
+    from engine import pipeline
+
+    con, perfil, _ = churn
+    analise = pipeline.analisar(con, "limpa", {}, {}, None, None, LOCAL)
+    primeiro = analise["insights"]["insights"][0]
+    grafico = primeiro["grafico"]
+    assert (grafico["tipo"], grafico["x"], grafico["y"], grafico["agregacao"]) == ("barras", "contrato", "cancelou", "taxa")
+    assert primeiro["destaque"] == "Mensal" and primeiro["destaque"] in {p["x"] for p in grafico["dados"]}
+    assert primeiro["numero"].endswith("%")
+    rotulos = {item["rotulo"]: item["valor"] for item in analise["resumo"]}
+    assert rotulos["linhas"] == "3.000" and "cancelou = sim" in rotulos
