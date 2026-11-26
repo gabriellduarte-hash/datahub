@@ -441,3 +441,30 @@ input.campo { padding: 6px 9px; }
 .motor-carregando .ponto { animation: piscar-motor 1.2s steps(2) infinite; }
 @keyframes piscar-motor { 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { .motor-carregando .ponto { animation: none; } }
+
+/* Gráficos que o usuário monta */
+.modulos.livres > .modulo { grid-column: span 6; }
+.modulo.construtor { gap: 14px; border-style: dashed; border-color: var(--linha-forte); }
+.tipos-grafico { justify-self: start; flex-wrap: wrap; }
+.construtor-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.modulo-botoes { margin-left: auto; display: flex; gap: 6px; }
+.modulo.adicionar-grafico {
+  min-height: 180px; place-content: center; justify-items: center; text-align: center; gap: 6px; cursor: pointer;
+  border-style: dashed; color: var(--tinta); font: inherit;
+}
+.modulo.adicionar-grafico:hover:not(:disabled) { border-color: var(--destaque); }
+.modulo.adicionar-grafico:disabled { cursor: not-allowed; opacity: 0.6; }
+.adicionar-mais { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: var(--destaque); color: var(--sobre-destaque); font: 600 22px/1 var(--fonte-sans); }
+@media (max-width: 1100px) { .modulos.livres > .modulo { grid-column: 1 / -1; } }
+
+/* Planilha: agrupar e marcar todas */
+.painel-agrupar { display: grid; gap: 10px; padding: 12px 14px; border: 1px dashed var(--linha-forte); border-radius: var(--raio); background: var(--papel-2); }
+.agrupar-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+.agrupar-linha .campo { width: auto; min-width: 0; }
+.rotulo-curto { font: 500 10.5px/1 var(--fonte-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--tinta-suave); }
+.opcoes-agrupar { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-escolha { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid var(--linha-forte); border-radius: 999px; cursor: pointer; font-size: 12px; }
+.chip-escolha input { accent-color: var(--destaque); margin: 0; }
+.chip-escolha.on { border-color: var(--destaque); background: var(--destaque-fraco); }
+.botao.on { border-color: var(--tinta); background: var(--papel-3); }
+.marcar-todas { accent-color: var(--destaque); width: 15px; height: 15px; margin: 0; cursor: pointer; }

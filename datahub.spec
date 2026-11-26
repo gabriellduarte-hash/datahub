@@ -1,6 +1,6 @@
 # Receita do PyInstaller: um executável só, com Python, o motor, a API e a interface.
 #
-#   pyinstaller datahub.spec      →  dist/datahub (ou dist/datahub.exe no Windows)
+#   pyinstaller datahub.spec      →  dist/tabula-rasa (ou dist/tabula-rasa.exe no Windows)
 #
 # Antes, exporte a interface para web/out (veja abrir_datahub.py).
 # O GitHub Actions faz isso para Windows, macOS e Linux: .github/workflows/executavel.yml
@@ -24,7 +24,7 @@ executavel = EXE(
     analise.scripts,
     analise.binaries,
     analise.datas,
-    name="datahub",
+    name="tabula-rasa",
     console=True,   # a janela mostra o endereço e encerra o hub ao ser fechada
     upx=False,
 )

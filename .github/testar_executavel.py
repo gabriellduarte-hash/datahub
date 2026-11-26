@@ -31,7 +31,7 @@ def main(executavel: str) -> None:
         else:
             raise SystemExit("O executável não respondeu em 2 minutos.")
         status, pagina = pedir("/")
-        assert status == 200 and b"<title>datahub</title>" in pagina, "a interface não veio"
+        assert status == 200 and b"<title>Tabula rasa</title>" in pagina, "a interface não veio"
         status, corpo = pedir("/api/sessoes/exemplo", "POST")
         tabela = json.loads(corpo)["tabelas"][0]
         assert status == 200 and tabela["arquivo"]["linhas"] > 0, "a sessão de exemplo falhou"

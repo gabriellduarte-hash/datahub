@@ -2,8 +2,8 @@
 # Python serve os dois no mesmo endereço. Roda em qualquer hospedagem de
 # contêiner (Fly.io, Cloud Run, Render, uma VM...).
 #
-#   podman build -t datahub .
-#   podman run --rm -p 8080:8080 datahub      →  http://localhost:8080
+#   podman build -t tabula-rasa .
+#   podman run --rm -p 8080:8080 tabula-rasa      →  http://localhost:8080
 
 # ---- 1. a interface ----
 FROM docker.io/library/node:24-slim AS web

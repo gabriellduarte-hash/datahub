@@ -188,7 +188,7 @@ export function Hub() {
   return (
     <>
       <header className="menu">
-        <span className="logo"><span className="logo-marca" aria-hidden="true" />datahub</span>
+        <span className="logo"><span className="logo-marca" aria-hidden="true" />Tabula rasa</span>
         <nav className="etapas" aria-label="Etapas">
           {ETAPAS.map((item, indice) => (
             <button key={item.id} type="button" className="etapa" disabled={!liberada(item.id)}

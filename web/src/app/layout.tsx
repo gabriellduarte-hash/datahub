@@ -6,7 +6,7 @@ const sans = Geist({ variable: "--fonte-sans", subsets: ["latin"] });
 const mono = Geist_Mono({ variable: "--fonte-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "datahub",
+  title: "Tabula rasa",
   description: "Normalização, gráficos e insights de planilhas, sem IA.",
 };
 

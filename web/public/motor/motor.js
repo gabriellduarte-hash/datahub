@@ -1,7 +1,7 @@
-/* O motor do datahub dentro do navegador, num Web Worker.
+/* O motor do Tabula rasa dentro do navegador, num Web Worker.
  *
  * Carrega o Pyodide (o Python compilado para WebAssembly), a DuckDB e o código
- * do datahub, e atende os pedidos da interface chamando a mesma API FastAPI do
+ * do Tabula rasa, e atende os pedidos da interface chamando a mesma API FastAPI do
  * servidor, sem rede (navegador/ponte.py). Os arquivos do usuário ficam na
  * memória desta aba e nunca saem do computador.
  *
@@ -23,7 +23,7 @@ async function iniciar() {
   const py = await loadPyodide({ indexURL: PYODIDE });
   avisar("Carregando a DuckDB e as bibliotecas");
   await py.loadPackage(["micropip", "duckdb", "pydantic", "anyio", "fastapi", "starlette"], { messageCallback: () => {} });
-  avisar("Carregando o motor do datahub");
+  avisar("Carregando o motor do Tabula rasa");
   const aqui = new URL("./", self.location.href);
   const manifesto = await (await fetch(new URL("manifesto.json", aqui), { cache: "no-cache" })).json();
   const codigo = await (await fetch(new URL(manifesto.codigo, aqui))).arrayBuffer();

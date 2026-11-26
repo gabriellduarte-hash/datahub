@@ -12,5 +12,5 @@ if [ "$1" = "--reconstruir" ] || [ ! -f web/out/index.html ]; then
   (cd web && { [ -d node_modules ] || npm ci; } && DATAHUB_EXPORTAR=1 NEXT_PUBLIC_API_URL= npm run build)
 fi
 
-echo "datahub em http://localhost:${PORT:-8000}"
+echo "Tabula rasa em http://localhost:${PORT:-8000}"
 DATAHUB_WEB="$PWD/web/out" exec .venv/bin/python -m uvicorn api.main:app --host "${HOST:-127.0.0.1}" --port "${PORT:-8000}"

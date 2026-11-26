@@ -1,4 +1,4 @@
-"""Abre o datahub no seu computador: sobe a API, que também entrega a interface, e abre o navegador.
+"""Abre o Tabula rasa no seu computador: sobe a API, que também entrega a interface, e abre o navegador.
 
 É o ponto de entrada do executável (veja datahub.spec) e também roda direto,
 depois de exportar a interface:
@@ -65,7 +65,7 @@ def main() -> None:
 
     porta = porta_livre()
     endereco = f"http://127.0.0.1:{porta}"
-    print(f"\n  datahub rodando em {endereco}\n"
+    print(f"\n  Tabula rasa rodando em {endereco}\n"
           "  O navegador abre sozinho. Para encerrar, feche esta janela ou aperte Ctrl+C.\n"
           "  Seus arquivos não saem deste computador.\n", flush=True)
     threading.Thread(target=abrir_quando_pronto, args=(endereco,), daemon=True).start()

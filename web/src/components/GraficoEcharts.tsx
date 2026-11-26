@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { BarChart, LineChart, ScatterChart } from "echarts/charts";
+import { BarChart, LineChart, PieChart, ScatterChart } from "echarts/charts";
 import { GridComponent, TooltipComponent } from "echarts/components";
 import * as echarts from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { fmtEixo, fmtInteiro, fmtValor } from "@/lib/formato";
 import type { Grafico } from "@/lib/tipos";
 
-echarts.use([BarChart, LineChart, ScatterChart, GridComponent, TooltipComponent, CanvasRenderer]);
+echarts.use([BarChart, LineChart, PieChart, ScatterChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
 type Cores = { tinta: string; suave: string; fraca: string; papel: string; destaque: string; linha: string; trilho: string; mono: string };
 
@@ -20,6 +20,14 @@ function lerCores(): Cores {
     destaque: cor("--destaque-grafico"), linha: cor("--linha"), trilho: cor("--trilho"),
     mono: getComputedStyle(document.body).fontFamily || "monospace",
   };
+}
+
+/* "#ececea" com 40% de opacidade vira "rgba(236, 236, 234, 0.4)": o canvas do ECharts não lê color-mix. */
+function comAlfa(cor: string, alfa: number): string {
+  const hex = cor.replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return cor;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return `rgba(${r}, ${g}, ${b}, ${alfa})`;
 }
 
 /* Monocromia com um destaque: o grupo ou período que o insight cita fica verde,
@@ -112,6 +120,39 @@ function opcoes(grafico: Grafico, c: Cores, destaque: string | null, compacto: b
       xAxis: { ...eixoBase, type: "category" as const, data: grafico.dados.map((d) => String(d.x)), axisLabel: { ...texto, hideOverlap: true } },
       yAxis: { ...eixoValor, axisLabel: { ...eixoValor.axisLabel, formatter: (v: number) => fmtEixo(v, null) } },
       series: [{ type: "bar", barCategoryGap: "18%", data: grafico.dados.map((d) => d.y), itemStyle: { color: c.suave, borderRadius: [2, 2, 0, 0] } }],
+    };
+  }
+
+  /* Rosca: partes de um todo. A fatia citada (ou a maior) em verde, as outras em tons da tinta. */
+  if (grafico.tipo === "rosca") {
+    const total = grafico.dados.reduce((soma, d) => soma + (d.y ?? 0), 0) || 1;
+    const maior = [...grafico.dados].sort((a, b) => (b.y ?? 0) - (a.y ?? 0))[0];
+    const realce = destaque && grafico.dados.some((d) => String(d.x) === destaque) ? destaque : String(maior?.x);
+    const tom = (indice: number) => comAlfa(c.tinta, Math.max(0.22, 0.88 - indice * 0.14));
+    let comuns = 0;
+    return {
+      ...base,
+      tooltip: {
+        ...base.tooltip, trigger: "item" as const,
+        formatter: (p: { name: string; value: number }) => `${p.name}<br><b>${fmtValor(p.value, grafico.unidade)}</b> · ${fmtValor((p.value / total) * 100, "%")}`,
+      },
+      series: [{
+        type: "pie",
+        radius: compacto ? ["42%", "66%"] : ["46%", "72%"],
+        center: ["50%", "52%"],
+        avoidLabelOverlap: true,
+        itemStyle: { borderColor: c.papel, borderWidth: 2 },
+        label: {
+          color: c.suave, fontFamily: c.mono, fontSize: compacto ? 10 : 10.5,
+          formatter: (p: { name: string; percent: number }) => `${p.name.length > 18 ? `${p.name.slice(0, 17)}…` : p.name}  ${p.percent.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`,
+        },
+        labelLine: { lineStyle: { color: c.linha }, length: 8, length2: 8 },
+        data: grafico.dados.map((d) => ({
+          name: String(d.x),
+          value: d.y ?? 0,
+          itemStyle: { color: d.outros ? c.fraca : String(d.x) === realce ? c.destaque : tom(comuns++) },
+        })),
+      }],
     };
   }
 

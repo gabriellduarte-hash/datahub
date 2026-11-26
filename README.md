@@ -1,4 +1,4 @@
-# datahub
+# Tabula rasa
 
 [![Testes](https://github.com/gabriellduarte-hash/datahub/actions/workflows/testes.yml/badge.svg)](https://github.com/gabriellduarte-hash/datahub/actions/workflows/testes.yml)
 [![Última versão](https://img.shields.io/github/v/release/gabriellduarte-hash/datahub?label=execut%C3%A1vel)](https://github.com/gabriellduarte-hash/datahub/releases/latest)
@@ -9,7 +9,7 @@ Limpeza, sandbox e insights de planilhas, **sem IA**: regras, estatística e SQL
 
 ## Experimente
 
-**[Abrir o datahub no navegador →](https://gabriellduarte-hash.github.io/datahub/)**
+**[Abrir o Tabula rasa no navegador →](https://gabriellduarte-hash.github.io/datahub/)**
 
 O site roda o motor inteiro dentro do seu navegador, sem servidor: o arquivo que você envia não sai do seu computador. A primeira visita leva alguns segundos para carregar o motor; depois o navegador guarda.
 
@@ -156,8 +156,8 @@ Ficam em `engine/limites.py`.
 O `Dockerfile` gera uma imagem com o hub inteiro. A interface vira arquivos estáticos e a API os serve no mesmo endereço, então não há CORS nem dois serviços para manter. A imagem já liga o modo público.
 
 ```bash
-podman build -t datahub .
-podman run --rm -p 8080:8080 datahub   # http://localhost:8080
+podman build -t tabula-rasa .
+podman run --rm -p 8080:8080 tabula-rasa   # http://localhost:8080
 ```
 
 No modo público, `api/publico.py` e `api/sessoes.py` protegem a máquina:

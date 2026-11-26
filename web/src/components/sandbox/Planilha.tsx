@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { AgGridReact } from "ag-grid-react";
 import {
   AllCommunityModule, ModuleRegistry, themeQuartz,
-  type CellValueChangedEvent, type ColDef, type GridApi, type IDatasource, type ValueFormatterParams,
+  type CellValueChangedEvent, type ColDef, type GridApi, type IDatasource, type SelectionChangedEvent, type ValueFormatterParams,
 } from "ag-grid-community";
 import * as api from "@/lib/api";
 import { fmtInteiro } from "@/lib/formato";
@@ -58,6 +58,26 @@ type Props = {
   executar: (texto: string, tarefa: () => Promise<void>) => Promise<void>;
 };
 
+/* "Marcar todas" vale para a visão inteira, não só para as linhas já carregadas:
+   a planilha busca as linhas aos poucos, então a escolha fica guardada aqui e as
+   linhas que chegam depois já vêm marcadas. */
+type Selecao = { todas: boolean; algumas: boolean; total: number; alternar: () => void };
+const ContextoSelecao = createContext<Selecao>({ todas: false, algumas: false, total: 0, alternar: () => {} });
+
+function CabecalhoSelecao() {
+  const { todas, algumas, total, alternar } = useContext(ContextoSelecao);
+  return (
+    <input type="checkbox" className="marcar-todas" checked={todas} onChange={alternar}
+           ref={(caixa) => { if (caixa) caixa.indeterminate = algumas && !todas; }}
+           aria-label={todas ? "Desmarcar todas" : `Marcar todas as ${fmtInteiro(total)} linhas da visão`}
+           title={todas ? "Desmarcar todas" : `Marcar todas as ${fmtInteiro(total)} linhas da visão`} />
+  );
+}
+
+const FUNCOES_AGRUPAR: [string, string][] = [["soma", "soma"], ["media", "média"], ["minimo", "mínimo"], ["maximo", "máximo"]];
+type Agrupamento = { colunas: string[]; contagem: string; agregacoes: { coluna: string; funcao: string }[] };
+const AGRUPAMENTO_VAZIO: Agrupamento = { colunas: [], contagem: "quantidade", agregacoes: [] };
+
 function formatar({ value }: ValueFormatterParams) {
   if (value === null || value === undefined) return "vazio";
   if (value === true) return "sim";
@@ -80,7 +100,21 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
   const [colunaAcao, setColunaAcao] = useState("");
   const [nomeNovo, setNomeNovo] = useState("");
   const [busca, setBusca] = useState({ coluna: "", termo: "", inteiro: false });
+  const [todas, setTodas] = useState(false);
+  const todasAgora = useRef(false);
+  const [agrupando, setAgrupando] = useState<Agrupamento | null>(null);
+  const [novaConta, setNovaConta] = useState({ funcao: "soma", coluna: "" });
   const sessao = area.sessao;
+
+  const marcarTodas = useCallback((marcar: boolean) => {
+    todasAgora.current = marcar;
+    setTodas(marcar);
+    if (marcar) grade.current?.forEachNode((no) => { if (no.data) no.setSelected(true, false, "api"); });
+    else {
+      grade.current?.deselectAll();
+      setMarcadas([]);
+    }
+  }, []);
 
   /* As colunas vêm da primeira página. Mudam quando uma fórmula cria ou um passo apaga ou renomeia uma coluna. */
   useEffect(() => {
@@ -113,9 +147,35 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
   /* Depois de um passo, a planilha busca de novo o que está à vista, sem perder a rolagem. */
   useEffect(() => {
     grade.current?.refreshInfiniteCache();
-    setMarcadas([]);
-    grade.current?.deselectAll();
-  }, [tabela.versao]);
+    marcarTodas(false);
+  }, [tabela.versao, marcarTodas]);
+
+  /* Com outro filtro, "todas" passaria a ser outras linhas: a marcação recomeça. */
+  useEffect(() => { marcarTodas(false); }, [filtros, marcarTodas]);
+
+  const aoMudarSelecao = (evento: SelectionChangedEvent) => {
+    const selecionadas = evento.api.getSelectedRows().map((linha) => linha.__linha as number);
+    if (todasAgora.current && evento.source !== "api") {
+      // desmarcou uma linha depois de marcar todas: vale o que está marcado na tela
+      todasAgora.current = false;
+      setTodas(false);
+    }
+    if (!todasAgora.current) setMarcadas(selecionadas);
+  };
+
+  const apagarMarcadas = () => {
+    if (todas) {
+      passo(`Apagando as ${fmtInteiro(totais.filtradas)} linhas do filtro`, { op: "filtrar_linhas", modo: "remover", filtros }, () => setFiltros([]));
+    } else {
+      passo("Apagando as linhas marcadas", { op: "remover_linhas", linhas: marcadas });
+    }
+  };
+
+  const agrupar = () => {
+    if (!agrupando) return;
+    const nomes = agrupando.colunas.join(", ");
+    passo(`Agrupando por ${nomes}`, { op: "agrupar", ...agrupando }, () => setAgrupando(null));
+  };
 
   const definicoes = useMemo<ColDef[]>(() => [
     { field: "__linha", headerName: "#", width: 84, pinned: "left", editable: false, sortable: false, cellClass: "celula-numero", headerTooltip: "Número da linha no arquivo" },
@@ -266,17 +326,79 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
                 onClick={() => passo("Apagando a coluna", { op: "remover_colunas", colunas: [colunaAcao] }, () => setColunaAcao(""))}>
           Apagar coluna
         </button>
+        <button type="button" className={`botao pequeno${agrupando ? " on" : ""}`} disabled={ocupado} aria-expanded={Boolean(agrupando)}
+                onClick={() => setAgrupando(agrupando ? null : { ...AGRUPAMENTO_VAZIO })}>
+          Agrupar…
+        </button>
         <span className="separador" aria-hidden="true" />
-        <button type="button" className="botao pequeno" disabled={ocupado || !marcadas.length}
-                onClick={() => passo("Apagando as linhas marcadas", { op: "remover_linhas", linhas: marcadas })}>
-          {marcadas.length ? `Apagar ${fmtInteiro(marcadas.length)} ${marcadas.length === 1 ? "linha" : "linhas"}` : "Apagar linhas marcadas"}
+        <button type="button" className="botao pequeno" disabled={ocupado || (todas ? !filtros.length : !marcadas.length)} onClick={apagarMarcadas}
+                title={todas && !filtros.length ? "Sem filtro, isso apagaria a tabela inteira. Filtre antes, ou desmarque algumas linhas." : undefined}>
+          {todas
+            ? `Apagar as ${fmtInteiro(totais.filtradas)} linhas${filtros.length ? " do filtro" : ""}`
+            : marcadas.length ? `Apagar ${fmtInteiro(marcadas.length)} ${marcadas.length === 1 ? "linha" : "linhas"}` : "Apagar linhas marcadas"}
         </button>
         <button type="button" className="botao pequeno" disabled={ocupado || !tabela.manipulacao.length} onClick={desfazer}>
           ↶ Desfazer
         </button>
       </div>
 
+      {agrupando ? (
+        <div className="painel-agrupar" role="group" aria-label="Agrupar linhas">
+          <div className="agrupar-linha">
+            <span className="rotulo-curto">Agrupar por</span>
+            <div className="opcoes-agrupar">
+              {colunas.map((coluna) => (
+                <label key={coluna.nome} className={`chip-escolha${agrupando.colunas.includes(coluna.nome) ? " on" : ""}`}>
+                  <input type="checkbox" checked={agrupando.colunas.includes(coluna.nome)}
+                         onChange={(e) => setAgrupando({
+                           ...agrupando,
+                           colunas: e.target.checked ? [...agrupando.colunas, coluna.nome] : agrupando.colunas.filter((c) => c !== coluna.nome),
+                         })} />
+                  {coluna.nome}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="agrupar-linha">
+            <label className="rotulo-curto" htmlFor="agrupar-contagem">Contagem em</label>
+            <input id="agrupar-contagem" className="campo" value={agrupando.contagem}
+                   onChange={(e) => setAgrupando({ ...agrupando, contagem: e.target.value })} />
+            <span className="rotulo-curto">Também calcular</span>
+            <select className="campo" aria-label="Cálculo" id="agrupar-funcao" value={novaConta.funcao} onChange={(e) => setNovaConta({ ...novaConta, funcao: e.target.value })}>
+              {FUNCOES_AGRUPAR.map(([valor, nome]) => <option key={valor} value={valor}>{nome}</option>)}
+            </select>
+            <span>de</span>
+            <select className="campo" aria-label="Coluna do cálculo" id="agrupar-coluna" value={novaConta.coluna} onChange={(e) => setNovaConta({ ...novaConta, coluna: e.target.value })}>
+              <option value="">coluna numérica…</option>
+              {colunas.filter((c) => NUMERICOS.test(c.tipo) && !agrupando.colunas.includes(c.nome)).map((c) => <option key={c.nome} value={c.nome}>{c.nome}</option>)}
+            </select>
+            <button type="button" className="botao pequeno" disabled={!novaConta.coluna}
+                    onClick={() => { setAgrupando({ ...agrupando, agregacoes: [...agrupando.agregacoes, { ...novaConta }] }); setNovaConta({ ...novaConta, coluna: "" }); }}>
+              + cálculo
+            </button>
+            {agrupando.agregacoes.map((conta, i) => (
+              <span key={`${conta.funcao}-${conta.coluna}-${i}`} className="filtro-chip">
+                {FUNCOES_AGRUPAR.find(([v]) => v === conta.funcao)?.[1]} de {conta.coluna}
+                <button type="button" aria-label="Tirar cálculo" onClick={() => setAgrupando({ ...agrupando, agregacoes: agrupando.agregacoes.filter((_, j) => j !== i) })}>×</button>
+              </span>
+            ))}
+          </div>
+          <div className="agrupar-linha">
+            <button type="button" className="botao pequeno principal" disabled={ocupado || !agrupando.colunas.length || !agrupando.contagem.trim()} onClick={agrupar}>
+              Agrupar
+            </button>
+            <button type="button" className="botao pequeno" onClick={() => setAgrupando(null)}>Cancelar</button>
+            <span className="texto-suave">
+              {agrupando.colunas.length
+                ? `Uma linha para cada combinação de ${agrupando.colunas.join(" + ")}, com a coluna ${agrupando.contagem || "quantidade"} dizendo quantas linhas foram juntadas. Vira um passo da receita: dá para desfazer.`
+                : "Marque as colunas que definem um grupo."}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
       <div className="grade-ag">
+        <ContextoSelecao.Provider value={{ todas, algumas: marcadas.length > 0, total: totais.filtradas, alternar: () => marcarTodas(!todas) }}>
         <AgGridReact
           theme={TEMA}
           rowModelType="infinite"
@@ -291,9 +413,14 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
           stopEditingWhenCellsLoseFocus
           onGridReady={(evento) => { grade.current = evento.api; }}
           onCellValueChanged={editar}
-          onSelectionChanged={(evento) => setMarcadas(evento.api.getSelectedRows().map((linha) => linha.__linha as number))}
+          selectionColumnDef={{ headerComponent: CabecalhoSelecao, pinned: "left", width: 52, sortable: false, resizable: false }}
+          onSelectionChanged={aoMudarSelecao}
+          onModelUpdated={(evento) => {
+            if (todasAgora.current) evento.api.forEachNode((no) => { if (no.data && !no.isSelected()) no.setSelected(true, false, "api"); });
+          }}
           localeText={{ noRowsToShow: "Nenhuma linha com esses filtros.", loadingOoo: "carregando…" }}
         />
+        </ContextoSelecao.Provider>
       </div>
 
       <div className="leitura">

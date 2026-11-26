@@ -22,7 +22,7 @@ from pathlib import Path
 
 import duckdb
 
-from engine import normalizacao, pipeline
+from engine import graficos, normalizacao, pipeline
 from engine.limites import LOCAL, Limites
 from engine.manipulacao import PassoInvalido
 from engine.perfil import perfilar_tabela
@@ -427,7 +427,64 @@ def analisar(con, area: dict, limites: Limites = LOCAL) -> dict:
     }
     if area["base"]["tipo"] == "tabela":
         tabela(area, area["base"]["id"])["perfil_limpo"] = resultado["perfil_limpo"]
+    area["analise"]["livres"] = [_calcular_livre(con, base, item, limites) for item in area.setdefault("graficos_livres", [])]
     return area["analise"]
+
+
+# ----- gráficos que o usuário monta -----
+# Ficam na sessão como pedidos (tipo, colunas, cálculo) e são recalculados a
+# cada análise: acompanham a base quando ela muda ou é editada.
+
+TIPOS_LIVRES = {"barras", "rosca", "linha", "histograma", "dispersao"}
+
+
+def _calcular_livre(con, base: dict, item: dict, limites: Limites) -> dict:
+    try:
+        grafico = asdict(graficos.calcular(con, base["nome"], base["unidades"], limites, item["pedido"], item["id"]))
+        return {"id": item["id"], "pedido": item["pedido"], "grafico": grafico, "erro": None}
+    except (ValueError, KeyError, duckdb.Error) as erro:
+        motivo = str(erro) if isinstance(erro, ValueError) else "As colunas deste gráfico não existem mais na base."
+        return {"id": item["id"], "pedido": item["pedido"], "grafico": None, "erro": motivo}
+
+
+def _pedido_livre(con, area: dict, pedido: dict) -> tuple[dict, dict]:
+    if not area.get("analise"):
+        raise PassoInvalido("Escolha uma base e analise antes de montar gráficos.")
+    if pedido.get("tipo") not in TIPOS_LIVRES:
+        raise PassoInvalido(f"Tipo de gráfico desconhecido: {pedido.get('tipo')}.")
+    base = descrever_base(area)
+    nomes = {nome for nome, _ in colunas_de(con, base["nome"])}
+    for coluna in (pedido.get("x"), pedido.get("y")):
+        if coluna is not None and coluna not in nomes:
+            raise PassoInvalido(f"A coluna {coluna} não existe na base.")
+    limpo = {chave: pedido.get(chave) for chave in ("tipo", "x", "y", "agregacao", "grao")}
+    return base, limpo
+
+
+def salvar_grafico_livre(con, area: dict, pedido: dict, limites: Limites = LOCAL, id_: str | None = None) -> dict:
+    """Cria (sem id) ou troca um gráfico do usuário. Só guarda se o gráfico sai: um pedido sem sentido explica o porquê."""
+    base, limpo = _pedido_livre(con, area, pedido)
+    livres = area.setdefault("graficos_livres", [])
+    if id_ is None:
+        id_ = f"l{max((int(item['id'][1:]) for item in livres), default=0) + 1}"
+    resultado = _calcular_livre(con, base, {"id": id_, "pedido": limpo}, limites)
+    if resultado["erro"]:
+        raise PassoInvalido(resultado["erro"])
+    posicao = next((i for i, item in enumerate(livres) if item["id"] == id_), None)
+    if posicao is None:
+        livres.append({"id": id_, "pedido": limpo})
+    else:
+        livres[posicao] = {"id": id_, "pedido": limpo}
+    lista = area["analise"].setdefault("livres", [])
+    lista[:] = [item for item in lista if item["id"] != id_]
+    lista.insert(posicao if posicao is not None else len(lista), resultado)
+    return resultado
+
+
+def remover_grafico_livre(area: dict, id_: str) -> None:
+    area["graficos_livres"] = [item for item in area.get("graficos_livres", []) if item["id"] != id_]
+    if area.get("analise"):
+        area["analise"]["livres"] = [item for item in area["analise"].get("livres", []) if item["id"] != id_]
 
 
 def trocar_papeis(area: dict, papeis: dict[str, str]) -> None:

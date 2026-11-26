@@ -3,8 +3,9 @@
 import { CartaoGrafico } from "@/components/blocos/BlocoGraficos";
 import { Execucoes, NOMES } from "@/components/blocos/BlocoInsights";
 import { GraficoEcharts } from "@/components/GraficoEcharts";
+import { GraficosLivres } from "@/components/sandbox/GraficosLivres";
 import { fmtInteiro } from "@/lib/formato";
-import type { Analise, Grafico, Insight, ItemResumo } from "@/lib/tipos";
+import type { Analise, Area, Grafico, Insight, ItemResumo } from "@/lib/tipos";
 
 /* Ícones do topo do painel: traços simples sobre o quadrado verde. */
 const ICONES: Record<string, string> = {
@@ -65,10 +66,11 @@ function ModuloInsight({ insight, principal, tema }: { insight: Insight; princip
   );
 }
 
-type Props = { sessao: string; analise: Analise | null; tema: string };
+type Props = { area: Area; analise: Analise | null; tema: string; ocupado: boolean; aoMudar: (area: Area) => void };
 
 /* Embaixo da tabela: os números da base e, em módulos, cada insight junto do dado que ele cita. */
-export function PainelExecutivo({ sessao, analise, tema }: Props) {
+export function PainelExecutivo({ area, analise, tema, ocupado, aoMudar }: Props) {
+  const sessao = area.sessao;
   if (!analise) {
     return (
       <section className="painel-executivo vazio">
@@ -99,6 +101,8 @@ export function PainelExecutivo({ sessao, analise, tema }: Props) {
           <p>Nada nestes dados passou dos critérios. Isso é um resultado válido: o hub não afirma o que os números não sustentam.</p>
         </div>
       )}
+
+      <GraficosLivres area={area} analise={analise} tema={tema} ocupado={ocupado} aoMudar={aoMudar} />
 
       {explorar.length ? (
         <>

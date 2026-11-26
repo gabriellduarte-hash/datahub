@@ -33,7 +33,7 @@ NOMES_AGREGACAO = {
 class Grafico:
     id: str
     titulo: str
-    tipo: str                   # linha, barras, histograma ou dispersao
+    tipo: str                   # linha, barras, rosca, histograma ou dispersao
     x: str | None
     y: str | None
     agregacao: str = "soma"
@@ -212,6 +212,8 @@ def calcular(con: duckdb.DuckDBPyConnection, tabela: str, unidades: dict[str, st
         return _linha(con, tabela, unidades, pedido, id)
     if tipo == "barras":
         return _barras(con, tabela, unidades, limites, pedido, id)
+    if tipo == "rosca":
+        return _rosca(con, tabela, unidades, limites, pedido, id)
     if tipo == "histograma":
         return _histograma(con, tabela, unidades, pedido, id)
     if tipo == "dispersao":
@@ -270,6 +272,19 @@ def _barras(con, tabela, unidades, limites, pedido, id) -> Grafico:
             aviso = f"Mostrando as {maximo} maiores de {len(linhas)} categorias."
     return Grafico(id, f"{_rotulo(agregacao, y)} por {x}", "barras", x, y, agregacao, None,
                    _unidade(unidades, agregacao, y), dados, aviso)
+
+
+def _rosca(con, tabela, unidades, limites, pedido, id) -> Grafico:
+    """Partes de um todo: só faz sentido somando (ou contando), nunca com média ou taxa."""
+    agregacao = pedido.get("agregacao") or "soma"
+    if agregacao not in {"soma", "contagem"}:
+        raise ValueError("A rosca mostra partes de um todo: use soma ou contagem.")
+    barras = _barras(con, tabela, unidades, limites, {**pedido, "agregacao": agregacao}, id)
+    if any(ponto["y"] is not None and ponto["y"] < 0 for ponto in barras.dados):
+        raise ValueError("A rosca não mostra valores negativos: use barras.")
+    barras.tipo = "rosca"
+    barras.titulo = f"Participação: {barras.titulo[0].lower()}{barras.titulo[1:]}"
+    return barras
 
 
 def _histograma(con, tabela, unidades, pedido, id) -> Grafico:

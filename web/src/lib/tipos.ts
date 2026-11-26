@@ -94,7 +94,7 @@ export type PontoGrafico = {
 export type Grafico = {
   id: string;
   titulo: string;
-  tipo: "linha" | "barras" | "histograma" | "dispersao";
+  tipo: "linha" | "barras" | "rosca" | "histograma" | "dispersao";
   x: string | null;
   y: string | null;
   agregacao: string;
@@ -159,7 +159,12 @@ export type Analise = {
   resumo: ItemResumo[];
   graficos: Grafico[];
   insights: { insights: Insight[]; execucoes: Execucao[] } | null;
+  livres?: GraficoLivre[];
 };
+
+/* Um gráfico montado pelo usuário: o pedido fica na sessão e é recalculado a cada análise. */
+export type PedidoGrafico = { tipo: Grafico["tipo"]; x: string | null; y: string | null; agregacao: string | null; grao: string | null };
+export type GraficoLivre = { id: string; pedido: PedidoGrafico; grafico: Grafico | null; erro: string | null };
 
 export type PontaRelacao = { tabela: string; coluna: string };
 export type Relacao = { id: string; de: PontaRelacao; para: PontaRelacao; cobertura: number };

@@ -118,6 +118,8 @@ def compilar(passo: dict, colunas: list[tuple[str, str]], origem: str) -> str:
         return f"SELECT * FROM {origem} WHERE coalesce(({condicoes}), false)"
     if op == "renomear_coluna":
         return _renomear(passo, colunas, origem)
+    if op == "agrupar":
+        return _agrupar(passo, colunas, origem)
     raise PassoInvalido(f"Passo desconhecido: {op}")
 
 
@@ -173,8 +175,58 @@ def _renomear(passo: dict, colunas: list[tuple[str, str]], origem: str) -> str:
     return f"SELECT {lista} FROM {origem}"
 
 
+FUNCOES_AGRUPAR = {"soma": "sum", "media": "avg", "minimo": "min", "maximo": "max"}
+NOMES_FUNCAO = {"soma": "soma", "media": "média", "minimo": "mínimo", "maximo": "máximo"}
+
+
+def _agrupar(passo: dict, colunas: list[tuple[str, str]], origem: str) -> str:
+    """Uma linha por combinação dos valores das colunas escolhidas, com quantas linhas caíram nela.
+
+    Cada grupo herda o número da primeira linha que o formou, como na remoção
+    de duplicatas: a planilha continua apontando para o arquivo original.
+    """
+    tipos = dict(colunas)
+    chaves = list(dict.fromkeys(passo.get("colunas") or []))
+    if not chaves:
+        raise PassoInvalido("Escolha ao menos uma coluna para agrupar.")
+    for chave in chaves:
+        if chave not in tipos or eh_interna(chave):
+            raise PassoInvalido(f"A coluna {chave} não existe.")
+    contagem = str(passo.get("contagem") or "quantidade").strip()
+    if eh_interna(contagem):
+        raise PassoInvalido('Nomes que começam com "__" são do próprio hub.')
+    usados = {chave.lower() for chave in chaves}
+    if contagem.lower() in usados:
+        raise PassoInvalido(f"A coluna de contagem não pode se chamar {contagem}: já é uma das colunas agrupadas.")
+    usados.add(contagem.lower())
+
+    lista = [ident(chave) for chave in chaves]
+    if LINHA in tipos:
+        lista.insert(0, f"min({ident(LINHA)}) AS {ident(LINHA)}")
+    lista.append(f"count(*) AS {ident(contagem)}")
+    for item in passo.get("agregacoes") or []:
+        coluna, funcao = item.get("coluna"), item.get("funcao")
+        if coluna not in tipos or eh_interna(coluna):
+            raise PassoInvalido(f"A coluna {coluna} não existe.")
+        if funcao not in FUNCOES_AGRUPAR:
+            raise PassoInvalido(f"Cálculo desconhecido: {funcao}.")
+        if funcao in {"soma", "media"} and not eh_numerico(tipos[coluna]):
+            raise PassoInvalido(f"{coluna} não é numérica, então não dá para calcular a {NOMES_FUNCAO[funcao]}.")
+        nome = f"{funcao}_{coluna}"
+        if nome.lower() in usados:
+            raise PassoInvalido(f"Duas colunas sairiam com o nome {nome}.")
+        usados.add(nome.lower())
+        lista.append(f"{FUNCOES_AGRUPAR[funcao]}({ident(coluna)}) AS {ident(nome)}")
+    ordem = f"ORDER BY {ident(LINHA)}" if LINHA in tipos else ""
+    return f"SELECT {', '.join(lista)} FROM {origem} GROUP BY {', '.join(ident(c) for c in chaves)} {ordem}"
+
+
 def descrever(passo: dict) -> str:
     op = passo.get("op")
+    if op == "agrupar":
+        extras = [f"{NOMES_FUNCAO.get(a.get('funcao'), a.get('funcao'))} de {a.get('coluna')}" for a in passo.get("agregacoes") or []]
+        texto = f"Agrupar por {', '.join(passo.get('colunas') or [])}, contando em {passo.get('contagem') or 'quantidade'}"
+        return texto + (f" e com {', '.join(extras)}" if extras else "")
     if op == "editar_celulas":
         edicoes = passo.get("edicoes") or []
         colunas = sorted({str(e.get("coluna")) for e in edicoes})

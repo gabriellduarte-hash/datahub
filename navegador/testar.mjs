@@ -21,9 +21,9 @@ await micropip.install(["python-multipart==0.0.33", "openpyxl==3.1.5"])
 sys.path[:0] = ["/datahub", "/datahub/navegador"]
 import duckdb, pytest
 print("Pyodide com DuckDB", duckdb.__version__)
-# test_api e test_publico usam o TestClient, que abre uma thread; a API é testada pela ponte, abaixo.
+# test_api*.py e test_publico usam o TestClient, que abre uma thread; a API é testada pela ponte, abaixo.
 pytest.main(["-q", "-p", "no:cacheprovider", "-o", "addopts=", "/datahub/tests",
-             "--ignore=/datahub/tests/test_api.py", "--ignore=/datahub/tests/test_publico.py"])
+             "--ignore-glob=/datahub/tests/test_api*.py", "--ignore=/datahub/tests/test_publico.py"])
 `);
 if (codigo !== 0) process.exit(1);
 
@@ -48,6 +48,9 @@ await pedir("GET", `/api/sessoes/${sessao}/tabelas/${tabela.id}/linhas?inicio=0&
 await pedir("POST", `/api/sessoes/${sessao}/tabelas/${tabela.id}/passos`, { passo: { op: "remover_linhas", linhas: [1, 2] } });
 await pedir("POST", `/api/sessoes/${sessao}/tabelas/${tabela.id}/formula`, { nome: "dobro", formula: "quantidade * 2" });
 await pedir("POST", `/api/sessoes/${sessao}/sql`, { sql: "SELECT categoria, count(*) FROM vendas_sujas GROUP BY 1" });
+const comGrafico = await pedir("POST", `/api/sessoes/${sessao}/graficos-livres`, { tipo: "rosca", x: "categoria", y: "valor_total", agregacao: "soma" });
+if (!comGrafico.analise.livres[0].grafico.dados.length) throw new Error("gráfico sob demanda vazio");
 const csv = await pedir("GET", `/api/sessoes/${sessao}/tabelas/${tabela.id}/exportar/csv`);
 if (csv.length < 1000) throw new Error("CSV exportado vazio");
+await pedir("POST", `/api/sessoes/${sessao}/tabelas/${tabela.id}/passos`, { passo: { op: "agrupar", colunas: ["categoria"], contagem: "pedidos" } });
 console.log("A API inteira respondeu pela ponte do navegador.");

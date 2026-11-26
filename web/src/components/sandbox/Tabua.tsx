@@ -86,7 +86,7 @@ export function Tabua({ area, tabela, tema, ocupado, aoMudar, executar, aoNormal
         </div>
       </div>
 
-      <PainelExecutivo sessao={area.sessao} analise={analise} tema={tema} />
+      <PainelExecutivo area={area} analise={analise} tema={tema} ocupado={ocupado} aoMudar={aoMudar} />
     </div>
   );
 }

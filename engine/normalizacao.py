@@ -186,7 +186,7 @@ EXPRESSOES = {
 }
 
 
-PASSOS_DA_SANDBOX = {"editar_celulas", "remover_linhas", "filtrar_linhas", "renomear_coluna"}
+PASSOS_DA_SANDBOX = {"editar_celulas", "remover_linhas", "filtrar_linhas", "renomear_coluna", "agrupar"}
 
 
 def compilar(passo: dict, colunas: list[tuple[str, str]], origem: str) -> str:

@@ -37,7 +37,7 @@ from engine.relacional import JuncaoRecusada
 from engine.sql import LINHA, colunas_de, ident
 from samples.gerar_vendas import gerar
 
-app = FastAPI(title="datahub")
+app = FastAPI(title="Tabula rasa")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.environ.get("DATAHUB_ORIGENS", "http://localhost:3000").split(","),
@@ -467,6 +467,31 @@ def calcular_grafico(sessao: str, pedido: PedidoGrafico):
             if pedido.agregacao == "taxa":
                 raise HTTPException(422, "O cálculo % de sim só vale para colunas de sim/não.") from erro
             raise HTTPException(422, "Não consegui calcular esse gráfico com essas colunas.") from erro
+
+
+# ----- gráficos que o usuário monta -----
+
+@app.post("/api/sessoes/{sessao}/graficos-livres")
+def criar_grafico_livre(sessao: str, pedido: PedidoGrafico):
+    with sessoes.trabalhar(sessao) as (con, estado):
+        areas.salvar_grafico_livre(con, estado, pedido.model_dump(), LIMITES)
+        return estado
+
+
+@app.put("/api/sessoes/{sessao}/graficos-livres/{grafico_id}")
+def trocar_grafico_livre(sessao: str, grafico_id: str, pedido: PedidoGrafico):
+    with sessoes.trabalhar(sessao) as (con, estado):
+        if not any(item["id"] == grafico_id for item in estado.get("graficos_livres", [])):
+            raise HTTPException(404, "Esse gráfico não existe mais.")
+        areas.salvar_grafico_livre(con, estado, pedido.model_dump(), LIMITES, grafico_id)
+        return estado
+
+
+@app.delete("/api/sessoes/{sessao}/graficos-livres/{grafico_id}")
+def remover_grafico_livre(sessao: str, grafico_id: str):
+    with sessoes.trabalhar(sessao) as (_, estado):
+        areas.remover_grafico_livre(estado, grafico_id)
+        return estado
 
 
 # ----- SQL -----

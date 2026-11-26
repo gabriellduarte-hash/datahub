@@ -54,16 +54,16 @@ jobs:
       - run: pyinstaller datahub.spec --noconfirm
       - name: Testar o executável
         shell: bash
-        run: python .github/testar_executavel.py "dist/datahub${{ runner.os == 'Windows' && '.exe' || '' }}"
+        run: python .github/testar_executavel.py "dist/tabula-rasa${{ runner.os == 'Windows' && '.exe' || '' }}"
       - name: Compactar
         shell: bash
         run: |
           cd dist
-          if [ "$RUNNER_OS" = "Windows" ]; then 7z a "../datahub-${{ matrix.nome }}.zip" datahub.exe; else zip "../datahub-${{ matrix.nome }}.zip" datahub; fi
+          if [ "$RUNNER_OS" = "Windows" ]; then 7z a "../tabula-rasa-${{ matrix.nome }}.zip" tabula-rasa.exe; else zip "../tabula-rasa-${{ matrix.nome }}.zip" tabula-rasa; fi
       - uses: actions/upload-artifact@v7
         with:
-          name: datahub-${{ matrix.nome }}
-          path: datahub-${{ matrix.nome }}.zip
+          name: tabula-rasa-${{ matrix.nome }}
+          path: tabula-rasa-${{ matrix.nome }}.zip
 
   publicar:
     needs: executavel
@@ -74,9 +74,9 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: pacotes
-          pattern: datahub-*
+          pattern: tabula-rasa-*
           merge-multiple: true
       - name: Criar a versão com os executáveis
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" pacotes/*.zip --title "datahub $GITHUB_REF_NAME" --notes-file .github/notas-da-versao.md
+        run: gh release create "$GITHUB_REF_NAME" pacotes/*.zip --title "Tabula rasa $GITHUB_REF_NAME" --notes-file .github/notas-da-versao.md

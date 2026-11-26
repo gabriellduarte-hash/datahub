@@ -1,6 +1,6 @@
 import { NO_NAVEGADOR, pedirAoMotor, type RespostaMotor } from "./motor";
 import type {
-  Area, Base, Contagem, Esquema, Filtro, Grafico, PaginaLinhas, Papel, Passo, PreviaFormula, PontaRelacao, ResultadoSql, Saude,
+  Area, Base, Contagem, Esquema, Filtro, Grafico, PaginaLinhas, Papel, Passo, PedidoGrafico, PreviaFormula, PontaRelacao, ResultadoSql, Saude,
 } from "./tipos";
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -98,7 +98,7 @@ export async function baixarDoMotor(caminho: string): Promise<void> {
   if (resposta.status >= 400) throw new ErroApi(lerJson(resposta)?.erro ?? "O download falhou.", resposta.status);
   const cabecalho = (nome: string) => resposta.cabecalhos.find(([chave]) => chave === nome)?.[1] ?? "";
   const disposicao = cabecalho("content-disposition");
-  const nome = decodeURIComponent(/filename\*=UTF-8''([^;]+)/i.exec(disposicao)?.[1] ?? /filename="?([^";]+)"?/i.exec(disposicao)?.[1] ?? "datahub");
+  const nome = decodeURIComponent(/filename\*=UTF-8''([^;]+)/i.exec(disposicao)?.[1] ?? /filename="?([^";]+)"?/i.exec(disposicao)?.[1] ?? "tabula-rasa");
   const endereco = URL.createObjectURL(new Blob([resposta.corpo], { type: cabecalho("content-type") }));
   const link = Object.assign(document.createElement("a"), { href: endereco, download: nome });
   document.body.append(link);
@@ -154,6 +154,10 @@ export const escolherBase = (sessao: string, base: Base) => enviarJson<Area>(`${
 export const reanalisar = (sessao: string) => pedir<Area>(`${s(sessao)}/reanalisar`, { method: "POST" });
 export const trocarPapeis = (sessao: string, papeis: Record<string, Papel>) => enviarJson<Area>(`${s(sessao)}/papeis`, { papeis });
 export const calcularGrafico = (sessao: string, pedido: Partial<Grafico>) => enviarJson<Grafico>(`${s(sessao)}/grafico`, pedido);
+export const criarGraficoLivre = (sessao: string, pedido: PedidoGrafico) => enviarJson<Area>(`${s(sessao)}/graficos-livres`, pedido);
+export const trocarGraficoLivre = (sessao: string, id: string, pedido: PedidoGrafico) =>
+  enviarJson<Area>(`${s(sessao)}/graficos-livres/${id}`, pedido, "PUT");
+export const removerGraficoLivre = (sessao: string, id: string) => pedir<Area>(`${s(sessao)}/graficos-livres/${id}`, { method: "DELETE" });
 
 // SQL
 export const rodarSql = (sessao: string, sql: string, inicio: number, quantas: number) =>
