@@ -131,7 +131,7 @@ export type Tabela = {
   id: string;
   nome: string;
   titulo: string;
-  origem: "arquivo" | "consulta" | "empilhada";
+  origem: "arquivo" | "consulta" | "combinada";
   blocos: EstadoBloco[];
   arquivo: Leitura;
   perfil: Perfil | null;
@@ -144,6 +144,8 @@ export type Tabela = {
   desfazer_rapido: boolean;
   versao: number;
   caminho?: string;
+  /* Tabela combinada: de quais arquivos veio, em que versão de cada um e se tirou as duplicatas. */
+  definicao?: { tabelas: string[]; sem_duplicatas?: boolean; versoes?: Record<string, number> } | null;
 };
 
 export type Base = { tipo: "tabela" | "visao"; id: string };
@@ -160,7 +162,12 @@ export type Analise = {
   graficos: Grafico[];
   insights: { insights: Insight[]; execucoes: Execucao[] } | null;
   livres?: GraficoLivre[];
+  grao?: Grao;
 };
+
+/* O que cada linha da base representa: decide somar ou tirar a média (engine/grao.py). */
+export type TipoGrao = "evento" | "entidade" | "foto";
+export type Grao = { tipo: TipoGrao; motivo: string; escolhido: boolean };
 
 /* Um gráfico montado pelo usuário: o pedido fica na sessão e é recalculado a cada análise. */
 export type PedidoGrafico = { tipo: Grafico["tipo"]; x: string | null; y: string | null; agregacao: string | null; grao: string | null };
@@ -232,3 +239,41 @@ export type Saude = {
   horas_de_vida: number;
   limites: { max_bytes_arquivo: number | null; max_linhas: number; max_colunas: number; max_celulas: number };
 };
+
+/* Comparar os arquivos da sessão (engine/comparacao.py). */
+export type SituacaoColuna = "igual" | "nome_diferente" | "tipo_diferente" | "falta";
+export type ColunaComparada = {
+  chave: string;
+  nomes: Record<string, string | null>;
+  tipos: Record<string, string | null>;
+  papeis: Record<string, string | null>;
+  situacao: SituacaoColuna;
+  parecida_com: string | null;
+};
+export type ParComparado = {
+  a: string;
+  b: string;
+  colunas: string[];
+  fora: string[];
+  b_em_a: number;
+  a_em_b: number;
+  iguais: number;
+  exemplos: { linha_a: number; linha_b: number; valores: (string | null)[] }[];
+  chave: { coluna: string; ambos: number; so_a: number; so_b: number } | null;
+};
+export type PlanoCopia = {
+  origem: string;
+  destino: string;
+  aplicaveis: string[];
+  pulados: { titulo: string; motivo: string }[];
+  trocas: { de: string; para: string }[];
+  aplicado: boolean;
+};
+export type Comparacao = {
+  tabelas: { id: string; nome: string; titulo: string; linhas: number; duplicatas_dentro: number; normalizada: boolean }[];
+  colunas: ColunaComparada[];
+  pares: ParComparado[];
+  planos: PlanoCopia[];
+  deixadas_de_fora: number;
+};
+export type ResultadoCopia = { aplicados: number; pulados: { titulo: string; motivo: string }[]; trocas: { de: string; para: string }[] };

@@ -8,7 +8,8 @@ import {
 } from "ag-grid-community";
 import * as api from "@/lib/api";
 import { fmtInteiro } from "@/lib/formato";
-import type { Area, Contagem, Filtro, Passo, PreviaFormula, Tabela } from "@/lib/tipos";
+import type { Area, Contagem, Filtro, Passo, Tabela } from "@/lib/tipos";
+import { CabecalhoColuna, ContextoColunas, NovaColuna, NUMERICOS, nomeLivre, type AcoesColuna, type Lado } from "./Colunas";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -46,7 +47,6 @@ const OPERADORES: [string, string][] = [
   ["contem", "contém"], ["nao_contem", "não contém"], ["vazio", "vazio"], ["preenchido", "preenchido"],
 ];
 const NOMES_OPERADOR = Object.fromEntries(OPERADORES);
-const NUMERICOS = /INT|DOUBLE|FLOAT|DECIMAL/;
 
 type Linha = Record<string, string | number | boolean | null>;
 
@@ -93,12 +93,13 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
   const [filtros, setFiltros] = useState<Filtro[]>([]);
   const [marcadas, setMarcadas] = useState<number[]>([]);
   const [contagem, setContagem] = useState<Contagem | null>(null);
-  const [previa, setPrevia] = useState<PreviaFormula | null>(null);
-  const [erroFormula, setErroFormula] = useState<string | null>(null);
-  const [formula, setFormula] = useState({ nome: "", texto: "", substituir: false });
+  const [erroContagem, setErroContagem] = useState<string | null>(null);
   const [novoFiltro, setNovoFiltro] = useState<Filtro>({ coluna: "", operador: "igual", valor: "" });
-  const [colunaAcao, setColunaAcao] = useState("");
-  const [nomeNovo, setNomeNovo] = useState("");
+  const [novaColuna, setNovaColuna] = useState<{ apos: string | null } | null>(null);
+  const [editarAoMontar, setEditarAoMontar] = useState<string | null>(null);
+  const revelar = useRef<string | null>(null); // coluna recém-criada: a grade rola até ela
+  const ultimoArraste = useRef(0);
+  const arrastada = useRef<string | null>(null);
   const [busca, setBusca] = useState({ coluna: "", termo: "", inteiro: false });
   const [todas, setTodas] = useState(false);
   const todasAgora = useRef(false);
@@ -124,6 +125,14 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
       .catch(() => {});
     return () => { ativo = false; };
   }, [sessao, tabela.id, tabela.versao]);
+
+  /* A grade só desenha as colunas à vista: a coluna nova pode nascer fora da tela. */
+  useEffect(() => {
+    const nome = revelar.current;
+    if (!nome || !colunas.some((c) => c.nome === nome)) return;
+    revelar.current = null;
+    requestAnimationFrame(() => grade.current?.ensureColumnVisible(nome, "auto"));
+  }, [colunas]);
 
   const fonte = useMemo<IDatasource>(() => ({
     getRows: (pedido) => {
@@ -178,13 +187,14 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
   };
 
   const definicoes = useMemo<ColDef[]>(() => [
-    { field: "__linha", headerName: "#", width: 84, pinned: "left", editable: false, sortable: false, cellClass: "celula-numero", headerTooltip: "Número da linha no arquivo" },
+    { field: "__linha", headerName: "#", width: 84, pinned: "left", lockPosition: "left", suppressMovable: true, editable: false, sortable: false, cellClass: "celula-numero", headerTooltip: "Número da linha no arquivo" },
     ...colunas.map((coluna): ColDef => ({
       field: coluna.nome,
       headerName: coluna.nome,
       headerTooltip: `${coluna.nome} · ${coluna.tipo}`,
       editable: true,
       sortable: true,
+      headerComponent: CabecalhoColuna,
       cellDataType: false,
       minWidth: 120,
       flex: 1,
@@ -194,15 +204,52 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
     })),
   ], [colunas]);
 
-  const passo = useCallback((descricao: string, novo: Passo, depois?: () => void) => executar(descricao, async () => {
+  const passo = useCallback((descricao: string, novo: Passo, depois?: () => void, aoFalhar?: () => void) => executar(descricao, async () => {
     try {
       aoMudar(await api.acrescentarPasso(sessao, tabela.id, novo));
       depois?.();
     } catch (falha) {
       grade.current?.refreshInfiniteCache();
+      aoFalhar?.();
       throw falha;
     }
   }), [executar, aoMudar, sessao, tabela.id]);
+
+  /* A grade volta à ordem da tabela: depois de um arrasto recusado, ou feito com outro passo em andamento. */
+  const restaurarOrdem = useCallback(() => {
+    const api = grade.current;
+    if (!api) return;
+    const dados = new Set(colunas.map((c) => c.nome));
+    const fixas = api.getColumnState().filter((e) => !dados.has(e.colId)).map((e) => ({ colId: e.colId }));
+    api.applyColumnState({ state: [...fixas, ...colunas.map((c) => ({ colId: c.nome }))], applyOrder: true });
+  }, [colunas]);
+
+  /* Arrastar um cabeçalho muda a coluna de lugar só na tela; ao soltar, a posição nova vira passo da receita,
+     dita como "depois de" (ou "antes de") outra coluna. */
+  const aoSoltarColuna = () => {
+    ultimoArraste.current = Date.now();
+    const api = grade.current;
+    if (!api) return;
+    const nomes = colunas.map((c) => c.nome);
+    const dados = new Set(nomes);
+    const nova = api.getAllDisplayedColumns().map((c) => c.getColId()).filter((id) => dados.has(id));
+    const juntar = (lista: string[]) => lista.join("\u0000");
+    if (juntar(nova) === juntar(nomes)) return; // só mudou a largura
+    if (ocupado) {
+      restaurarOrdem();
+      return;
+    }
+    const sem = (lista: string[], coluna: string) => juntar(lista.filter((x) => x !== coluna));
+    const candidatas = nova.filter((coluna) => sem(nova, coluna) === sem(nomes, coluna));
+    const coluna = arrastada.current && candidatas.includes(arrastada.current) ? arrastada.current : candidatas[0];
+    if (!coluna) {
+      restaurarOrdem();
+      return;
+    }
+    const i = nova.indexOf(coluna);
+    const lugar = i > 0 ? { apos: nova[i - 1] } : { antes: nova[1] };
+    passo(`Movendo ${coluna}`, { op: "mover_coluna", coluna, ...lugar }, undefined, restaurarOrdem);
+  };
 
   const editar = (evento: CellValueChangedEvent) => {
     if (evento.oldValue === evento.newValue) return;
@@ -213,20 +260,37 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
     });
   };
 
-  const verPrevia = async (evento?: FormEvent) => {
-    evento?.preventDefault();
-    try {
-      setPrevia(await api.previaFormula(sessao, tabela.id, formula.nome, formula.texto, formula.substituir));
-      setErroFormula(null);
-    } catch (falha) {
-      setPrevia(null);
-      setErroFormula((falha as Error).message);
-    }
-  };
+  const verPrevia = useCallback((nome: string, formula: string, substituir: boolean) =>
+    api.previaFormula(sessao, tabela.id, nome, formula, substituir), [sessao, tabela.id]);
 
-  const criarColuna = () => passo(`Calculando ${formula.nome}`, {
-    op: "formula", nome: formula.nome, formula: formula.texto, substituir: formula.substituir,
-  }, () => { setPrevia(null); setFormula({ nome: "", texto: "", substituir: false }); });
+  /* O que o cabeçalho de cada coluna pode fazer. */
+  const acoesColuna = useMemo<AcoesColuna>(() => ({
+    ocupado,
+    renomear: (coluna, nome) => passo(`Renomeando ${coluna} para ${nome}`, { op: "renomear_coluna", coluna, nome }),
+    apagar: (coluna) => passo(`Apagando a coluna ${coluna}`, { op: "remover_colunas", colunas: [coluna] }),
+    inserirVazia: (coluna: string, lado: Lado) => {
+      const nome = nomeLivre("coluna_nova", colunas);
+      passo("Inserindo uma coluna", { op: "formula", nome, vazia: true, [lado]: coluna }, () => {
+        revelar.current = nome;
+        setEditarAoMontar(nome);
+      });
+    },
+    calcular: (coluna) => setNovaColuna({ apos: coluna }),
+    mover: (coluna, sentido) => {
+      const i = colunas.findIndex((c) => c.nome === coluna);
+      const alvo = colunas[sentido === "esquerda" ? i - 1 : i + 1]?.nome;
+      if (i < 0 || !alvo) return;
+      passo(`Movendo ${coluna}`, { op: "mover_coluna", coluna, ...(sentido === "esquerda" ? { antes: alvo } : { apos: alvo }) },
+            () => { revelar.current = coluna; });
+    },
+    vizinhas: (coluna) => {
+      const i = colunas.findIndex((c) => c.nome === coluna);
+      return { esquerda: i > 0 ? colunas[i - 1].nome : null, direita: i >= 0 && i < colunas.length - 1 ? colunas[i + 1].nome : null };
+    },
+    acabouDeArrastar: () => Date.now() - ultimoArraste.current < 400,
+    editarAoMontar,
+    jaEditou: () => setEditarAoMontar(null),
+  }), [ocupado, passo, colunas, editarAoMontar]);
 
   const adicionarFiltro = (evento: FormEvent) => {
     evento.preventDefault();
@@ -242,9 +306,10 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
     if (!busca.coluna || !busca.termo) return;
     try {
       setContagem(await api.contarTermo(sessao, tabela.id, busca.coluna, busca.termo, busca.inteiro, filtros));
+      setErroContagem(null);
     } catch (falha) {
       setContagem(null);
-      setErroFormula((falha as Error).message);
+      setErroContagem((falha as Error).message);
     }
   };
 
@@ -257,32 +322,6 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
 
   return (
     <div className="planilha">
-      <form className="barra-formula" onSubmit={verPrevia}>
-        <span className="fx" aria-hidden="true">ƒx</span>
-        <label className="sr" htmlFor="formula-nome">Nome da coluna</label>
-        <input id="formula-nome" className="campo" placeholder="nova coluna" value={formula.nome}
-               onChange={(e) => setFormula({ ...formula, nome: e.target.value })} />
-        <span aria-hidden="true">=</span>
-        <label className="sr" htmlFor="formula-texto">Fórmula</label>
-        <input id="formula-texto" className="campo formula-texto" placeholder='SE(tenure < 12; "novo"; "antigo")'
-               value={formula.texto} onChange={(e) => setFormula({ ...formula, texto: e.target.value })} />
-        <label className="caixa" htmlFor="formula-substituir">
-          <input id="formula-substituir" type="checkbox" checked={formula.substituir}
-                 onChange={(e) => setFormula({ ...formula, substituir: e.target.checked })} /> substituir
-        </label>
-        <button type="submit" className="botao pequeno" disabled={!formula.nome || !formula.texto}>Prévia</button>
-        <button type="button" className="botao pequeno principal" disabled={ocupado || !formula.nome || !formula.texto} onClick={criarColuna}>Criar coluna</button>
-      </form>
-      {erroFormula ? <p className="aviso-linha" role="alert">! {erroFormula}</p> : null}
-      {previa ? (
-        <div className="previa">
-          <span className="texto-suave">{previa.tipo} · {fmtInteiro(previa.vazios)} vazios em {fmtInteiro(previa.linhas)} linhas</span>
-          <span className="previa-valores">
-            {previa.previa.map((p, i) => <span key={i}><b>#{p.linha}</b> {p.valor === null ? "vazio" : String(p.valor)}</span>)}
-          </span>
-        </div>
-      ) : null}
-
       <div className="filtros-vista">
         {filtros.map((filtro, i) => (
           <span key={i} className="filtro-chip">
@@ -313,21 +352,12 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
       </div>
 
       <div className="acoes-planilha">
-        <select className="campo" aria-label="Coluna" id="acao-coluna" value={colunaAcao} onChange={(e) => setColunaAcao(e.target.value)}>
-          <option value="">coluna…</option>
-          {opcoesColunas}
-        </select>
-        <input className="campo" aria-label="Nome novo" id="acao-nome" placeholder="nome novo" value={nomeNovo} onChange={(e) => setNomeNovo(e.target.value)} />
-        <button type="button" className="botao pequeno" disabled={ocupado || !colunaAcao || !nomeNovo}
-                onClick={() => passo("Renomeando a coluna", { op: "renomear_coluna", coluna: colunaAcao, nome: nomeNovo }, () => { setNomeNovo(""); setColunaAcao(""); })}>
-          Renomear
-        </button>
-        <button type="button" className="botao pequeno" disabled={ocupado || !colunaAcao}
-                onClick={() => passo("Apagando a coluna", { op: "remover_colunas", colunas: [colunaAcao] }, () => setColunaAcao(""))}>
-          Apagar coluna
+        <button type="button" className={`botao pequeno${novaColuna ? " on" : ""}`} disabled={ocupado} aria-expanded={Boolean(novaColuna)}
+                onClick={() => { setNovaColuna(novaColuna ? null : { apos: null }); setAgrupando(null); }}>
+          + Coluna
         </button>
         <button type="button" className={`botao pequeno${agrupando ? " on" : ""}`} disabled={ocupado} aria-expanded={Boolean(agrupando)}
-                onClick={() => setAgrupando(agrupando ? null : { ...AGRUPAMENTO_VAZIO })}>
+                onClick={() => { setAgrupando(agrupando ? null : { ...AGRUPAMENTO_VAZIO }); setNovaColuna(null); }}>
           Agrupar…
         </button>
         <span className="separador" aria-hidden="true" />
@@ -340,7 +370,14 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
         <button type="button" className="botao pequeno" disabled={ocupado || !tabela.manipulacao.length} onClick={desfazer}>
           ↶ Desfazer
         </button>
+        <span className="dica-colunas texto-suave">Duplo clique no nome renomeia · arraste o cabeçalho para mudar de lugar · ⋮ mais opções</span>
       </div>
+
+      {novaColuna ? (
+        <NovaColuna key={novaColuna.apos ?? ""} colunas={colunas} apos={novaColuna.apos} ocupado={ocupado} verPrevia={verPrevia}
+                    criar={(descricao, novo, nome) => passo(descricao, novo, () => { revelar.current = nome; setNovaColuna(null); })}
+                    fechar={() => setNovaColuna(null)} />
+      ) : null}
 
       {agrupando ? (
         <div className="painel-agrupar" role="group" aria-label="Agrupar linhas">
@@ -398,6 +435,7 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
       ) : null}
 
       <div className="grade-ag">
+        <ContextoColunas.Provider value={acoesColuna}>
         <ContextoSelecao.Provider value={{ todas, algumas: marcadas.length > 0, total: totais.filtradas, alternar: () => marcarTodas(!todas) }}>
         <AgGridReact
           theme={TEMA}
@@ -412,6 +450,9 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
           singleClickEdit={false}
           stopEditingWhenCellsLoseFocus
           onGridReady={(evento) => { grade.current = evento.api; }}
+          onColumnMoved={(evento) => { if (evento.column) arrastada.current = evento.column.getColId(); }}
+          onDragStopped={aoSoltarColuna}
+          suppressDragLeaveHidesColumns
           onCellValueChanged={editar}
           selectionColumnDef={{ headerComponent: CabecalhoSelecao, pinned: "left", width: 52, sortable: false, resizable: false }}
           onSelectionChanged={aoMudarSelecao}
@@ -421,6 +462,7 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
           localeText={{ noRowsToShow: "Nenhuma linha com esses filtros.", loadingOoo: "carregando…" }}
         />
         </ContextoSelecao.Provider>
+        </ContextoColunas.Provider>
       </div>
 
       <div className="leitura">
@@ -437,6 +479,7 @@ export function Planilha({ area, tabela, ocupado, aoMudar, executar }: Props) {
             <input id="contar-exato" type="checkbox" checked={busca.inteiro} onChange={(e) => setBusca({ ...busca, inteiro: e.target.checked })} /> exato
           </label>
           <button type="submit" className="botao pequeno" disabled={!busca.coluna || !busca.termo}>→</button>
+          {erroContagem ? <span className="resultado-contagem" role="alert">! {erroContagem}</span> : null}
           {contagem ? <span className="resultado-contagem">{fmtInteiro(contagem.encontradas)} de {fmtInteiro(contagem.linhas)}</span> : null}
         </form>
         <span><b>Receita</b> {(tabela.receita?.length ?? 0) + tabela.manipulacao.length} passos · {tabela.manipulacao.length} da sandbox</span>

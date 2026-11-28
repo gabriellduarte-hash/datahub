@@ -186,7 +186,7 @@ EXPRESSOES = {
 }
 
 
-PASSOS_DA_SANDBOX = {"editar_celulas", "remover_linhas", "filtrar_linhas", "renomear_coluna", "agrupar"}
+PASSOS_DA_SANDBOX = {"editar_celulas", "remover_linhas", "filtrar_linhas", "renomear_coluna", "mover_coluna", "agrupar"}
 
 
 def compilar(passo: dict, colunas: list[tuple[str, str]], origem: str) -> str:
@@ -284,6 +284,8 @@ def descrever(passo: dict) -> str:
     if op == "coluna_calculada":
         return f"Calcular {passo['nome']} = {passo['a']} {passo['operador']} {passo['b']}"
     if op == "formula":
+        if passo.get("vazia"):
+            return f"Criar a coluna {passo.get('nome')} em branco"
         return f"Calcular {passo.get('nome')} = {passo.get('formula')}"
     if op in PASSOS_DA_SANDBOX:
         return manipulacao.descrever(passo)

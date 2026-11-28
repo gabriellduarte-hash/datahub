@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BlocoArquivo } from "@/components/blocos/BlocoArquivo";
+import { BlocoComparacao } from "@/components/blocos/BlocoComparacao";
 import { BlocoNormalizacao } from "@/components/blocos/BlocoNormalizacao";
 import { BlocoPerfil } from "@/components/blocos/BlocoPerfil";
 import { Tabua } from "@/components/sandbox/Tabua";
@@ -248,6 +249,9 @@ export function Hub() {
           <>
             <BlocoArquivo sessao={area?.sessao ?? null} tabela={ativa} ocupado={Boolean(ocupado)} aoEnviar={enviar}
                           aoExemplo={exemplo} aoTrocarAba={trocarAba} aoCarregarAbas={carregarAbas} />
+            {area && area.tabelas.filter((t) => t.origem !== "combinada").length >= 2 ? (
+              <BlocoComparacao area={area} ocupado={Boolean(ocupado)} executar={executar} aoMudar={receber} />
+            ) : null}
             {ativa?.perfil ? (
               <>
                 <BlocoPerfil key={`${ativa.id}-${ativa.versao}`} tabela={ativa} ocupado={Boolean(ocupado)} aoTrocarPapel={trocarPapel} />

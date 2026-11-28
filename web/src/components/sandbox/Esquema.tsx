@@ -54,7 +54,7 @@ export function Esquema({ area, ocupado, aoMudar, executar }: Props) {
     de: { tabela: "", coluna: "" }, para: { tabela: "", coluna: "" },
   });
   const [visao, setVisao] = useState<{ nome: string; tabela: string; relacoes: string[] }>({ nome: "", tabela: "", relacoes: [] });
-  const [pilha, setPilha] = useState<{ nome: string; tabelas: string[] }>({ nome: "", tabelas: [] });
+  const [combinacao, setCombinacao] = useState<{ nome: string; tabelas: string[] }>({ nome: "", tabelas: [] });
 
   const assinatura = [
     ...area.tabelas.map((t) => `${t.id}:${t.versao}:${t.nome}`),
@@ -219,19 +219,19 @@ export function Esquema({ area, ocupado, aoMudar, executar }: Props) {
         </section>
 
         <section>
-          <h4>Empilhar</h4>
-          <p className="texto-suave">Tabelas com as mesmas colunas, uma embaixo da outra, como vendas de cada mês.</p>
+          <h4>Combinar arquivos</h4>
+          <p className="texto-suave">Tabelas com as mesmas colunas, uma embaixo da outra, como vendas de cada mês. Para ver antes as diferenças e as duplicatas, use Comparar arquivos, na triagem.</p>
           {area.tabelas.map((t) => (
-            <label key={t.id} className="caixa" htmlFor={`pilha-${t.id}`}>
-              <input id={`pilha-${t.id}`} type="checkbox" checked={pilha.tabelas.includes(t.id)}
-                     onChange={(e) => setPilha({ ...pilha, tabelas: e.target.checked ? [...pilha.tabelas, t.id] : pilha.tabelas.filter((x) => x !== t.id) })} />
+            <label key={t.id} className="caixa" htmlFor={`combinacao-${t.id}`}>
+              <input id={`combinacao-${t.id}`} type="checkbox" checked={combinacao.tabelas.includes(t.id)}
+                     onChange={(e) => setCombinacao({ ...combinacao, tabelas: e.target.checked ? [...combinacao.tabelas, t.id] : combinacao.tabelas.filter((x) => x !== t.id) })} />
               {t.nome}
             </label>
           ))}
-          <input className="campo" aria-label="Nome da tabela empilhada" id="pilha-nome" placeholder="nome da tabela nova" value={pilha.nome}
-                 onChange={(e) => setPilha({ ...pilha, nome: e.target.value })} />
-          <button type="button" className="botao pequeno" disabled={ocupado || pilha.tabelas.length < 2}
-                  onClick={() => agir("Empilhando as tabelas", () => api.empilhar(area.sessao, pilha.tabelas, pilha.nome || "empilhada"))}>Empilhar</button>
+          <input className="campo" aria-label="Nome da tabela combinada" id="combinacao-nome" placeholder="nome da tabela nova" value={combinacao.nome}
+                 onChange={(e) => setCombinacao({ ...combinacao, nome: e.target.value })} />
+          <button type="button" className="botao pequeno" disabled={ocupado || combinacao.tabelas.length < 2}
+                  onClick={() => agir("Combinando as tabelas", () => api.combinar(area.sessao, combinacao.tabelas, combinacao.nome || "combinada"))}>Combinar</button>
         </section>
       </aside>
     </div>

@@ -26,8 +26,9 @@ from api import sessoes
 from api.publico import Protecao
 from api.sessoes import LIMITES, SessaoNaoEncontrada, ServidorOcupado
 from engine import area as areas
-from engine import cambio, consulta, formulas, graficos, relacional
+from engine import cambio, comparacao, consulta, formulas, graficos, relacional
 from engine.area import NaoEncontrado
+from engine.comparacao import CopiaRecusada
 from engine.consulta import ConsultaRecusada
 from engine.formulas import FormulaInvalida
 from engine.leitura import ArquivoInvalido
@@ -77,8 +78,9 @@ class PedidoPasso(BaseModel):
 
 class PedidoFormula(BaseModel):
     nome: str
-    formula: str
+    formula: str = ""
     substituir: bool = False
+    vazia: bool = False
 
 
 class PedidoPapeis(BaseModel):
@@ -143,9 +145,14 @@ class PedidoVisao(BaseModel):
     juncoes: list[dict]
 
 
-class PedidoEmpilhar(BaseModel):
+class PedidoCombinar(BaseModel):
     tabelas: list[str]
-    nome: str = "empilhada"
+    nome: str = "combinada"
+    sem_duplicatas: bool = False
+
+
+class PedidoCopiarReceita(BaseModel):
+    origem: str
 
 
 # ----- erros -----
@@ -184,6 +191,7 @@ def limite_excedido(_: Request, erro: LimiteExcedido):
 @app.exception_handler(FormulaInvalida)
 @app.exception_handler(ConsultaRecusada)
 @app.exception_handler(JuncaoRecusada)
+@app.exception_handler(CopiaRecusada)
 def pedido_recusado(_: Request, erro: ValueError):
     return JSONResponse({"erro": str(erro)}, status_code=422)
 
@@ -442,6 +450,19 @@ def reanalisar(sessao: str):
         return estado
 
 
+class PedidoGrao(BaseModel):
+    grao: str | None = None
+
+
+@app.post("/api/sessoes/{sessao}/grao")
+def trocar_grao(sessao: str, pedido: PedidoGrao):
+    """O que cada linha representa (acontecimento, pessoa ou coisa, retrato repetido); None volta ao detectado."""
+    with sessoes.trabalhar(sessao) as (con, estado):
+        areas.trocar_grao(estado, pedido.grao)
+        areas.analisar(con, estado, LIMITES)
+        return estado
+
+
 @app.post("/api/sessoes/{sessao}/papeis")
 def trocar_papeis(sessao: str, pedido: PedidoPapeis):
     """Refaz gráficos e insights com os papéis escolhidos para a base."""
@@ -604,11 +625,35 @@ def apagar_visao(sessao: str, visao_id: str):
         return estado
 
 
-@app.post("/api/sessoes/{sessao}/empilhar")
-def empilhar(sessao: str, pedido: PedidoEmpilhar):
+@app.post("/api/sessoes/{sessao}/combinar")
+def combinar(sessao: str, pedido: PedidoCombinar):
+    """Arquivos com as mesmas colunas, um embaixo do outro, numa tabela nova."""
     with sessoes.trabalhar(sessao) as (con, estado):
-        relacional.empilhar(con, estado, pedido.tabelas, pedido.nome)
+        relacional.combinar(con, estado, pedido.tabelas, pedido.nome, pedido.sem_duplicatas)
         return estado
+
+
+# ----- comparar arquivos -----
+
+@app.get("/api/sessoes/{sessao}/comparacao")
+def comparar_arquivos(sessao: str):
+    """Colunas que batem, duplicatas entre os arquivos e que limpeza de um serve para o outro."""
+    with sessoes.trabalhar(sessao, salvar=False) as (con, estado):
+        return comparacao.comparar(con, estado)
+
+
+@app.post("/api/sessoes/{sessao}/tabelas/{tabela}/copiar-receita")
+def copiar_receita(sessao: str, tabela: str, pedido: PedidoCopiarReceita):
+    """A tabela passa a ter a mesma limpeza da origem; os passos que não servem ficam de fora, com o motivo."""
+    origem = areas.tabela(sessoes.ler_estado(sessao), pedido.origem)
+    cambio_necessario = _precisa_do_cambio((origem.get("receita") or []) + origem["manipulacao"])
+    with sessoes.trabalhar(sessao, acesso_a_arquivos=cambio_necessario) as (con, estado):
+        if cambio_necessario:
+            cambio.garantir(con)
+        resultado = comparacao.copiar_receita(con, estado, pedido.origem, tabela, LIMITES)
+        if tabela in areas.dependencias(estado, estado["base"]):
+            areas.analisar(con, estado, LIMITES)
+        return {**estado, "copia": resultado}
 
 
 # ----- exportação -----

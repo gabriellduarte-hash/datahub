@@ -10,6 +10,7 @@ from pathlib import Path
 
 import duckdb
 
+from engine import grao as granulo
 from engine import graficos, insights, normalizacao, painel
 from engine.leitura import ArquivoInvalido, ler
 from engine.limites import LOCAL, LimiteExcedido, Limites
@@ -100,7 +101,7 @@ def _analisar(con, receita, relatorio, papeis, limites, estados, tabela: str = "
 
 def analisar(con: duckdb.DuckDBPyConnection, tabela: str, unidades: dict[str, str], derivadas: dict[str, set[str]],
              relatorio: Relatorio | None, papeis: dict[str, str] | None, limites: Limites = LOCAL,
-             estados: dict | None = None, so_media: set[str] | None = None) -> dict:
+             estados: dict | None = None, so_media: set[str] | None = None, grao: str | None = None) -> dict:
     """Blocos 4 e 5 sobre a base de análise: uma tabela ou uma visão que junta várias.
 
     `so_media` são colunas emprestadas de outra tabela numa visão: o limite do
@@ -109,6 +110,9 @@ def analisar(con: duckdb.DuckDBPyConnection, tabela: str, unidades: dict[str, st
     estados = {} if estados is None else estados
     perfil = perfilar_tabela(con, tabela, limites)
     aplicar_papeis(perfil, papeis)
+    # O que cada linha representa decide somar ou tirar a média (engine/grao.py).
+    escolha = granulo.resolver(con, tabela, perfil, grao)
+    granulo.aplicar(perfil, escolha.tipo)
     for coluna in perfil.colunas:
         if coluna.nome in (so_media or set()) and coluna.agregacao == "soma":
             coluna.agregacao = "media"
@@ -132,6 +136,7 @@ def analisar(con: duckdb.DuckDBPyConnection, tabela: str, unidades: dict[str, st
     return {
         "blocos": _lista(estados),
         "perfil_limpo": asdict(perfil),
+        "grao": asdict(escolha),
         "unidades": unidades,
         "resumo": resumo,
         "graficos": [asdict(g) for g in lista_graficos or []],

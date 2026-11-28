@@ -450,14 +450,33 @@ def _validar_nome(nome: str, existentes: list[str], substituir: bool) -> str:
 
 
 def compilar_passo(passo: dict, colunas: list[tuple[str, str]], origem: str) -> str:
-    """O SELECT do passo de fórmula: acrescenta a coluna nova ou troca os valores de uma existente."""
+    """O SELECT do passo de fórmula: acrescenta a coluna nova ou troca os valores de uma existente.
+
+    `vazia` cria a coluna em branco, para preencher à mão como numa planilha.
+    `apos` põe a coluna nova logo depois de outra, e `antes`, logo antes; sem
+    nenhum dos dois, ela vai para o fim.
+    """
     visiveis = [(nome, tipo) for nome, tipo in colunas if not eh_interna(nome)]
-    traducao = traduzir(str(passo.get("formula") or ""), dict(visiveis))
+    if passo.get("vazia"):
+        expressao = "CAST(NULL AS VARCHAR)"
+    else:
+        expressao = traduzir(str(passo.get("formula") or ""), dict(visiveis)).sql
     substituir = bool(passo.get("substituir"))
     nome = _validar_nome(passo.get("nome"), [n for n, _ in visiveis], substituir)
     if any(n == nome for n, _ in visiveis):
-        return f"SELECT * REPLACE (({traducao.sql}) AS {ident(nome)}) FROM {origem}"
-    return f"SELECT *, ({traducao.sql}) AS {ident(nome)} FROM {origem}"
+        return f"SELECT * REPLACE (({expressao}) AS {ident(nome)}) FROM {origem}"
+    nomes = [n for n, _ in visiveis]
+    apos, antes = passo.get("apos"), passo.get("antes")
+    if apos in nomes or antes in nomes:
+        nova, lista = f"({expressao}) AS {ident(nome)}", []
+        for coluna, _ in colunas:
+            if coluna == antes and apos not in nomes:
+                lista.append(nova)
+            lista.append(ident(coluna))
+            if coluna == apos:
+                lista.append(nova)
+        return f"SELECT {', '.join(lista)} FROM {origem}"
+    return f"SELECT *, ({expressao}) AS {ident(nome)} FROM {origem}"
 
 
 def colunas_usadas(passo: dict) -> set[str]:
@@ -486,6 +505,9 @@ def previa(con, tabela: str, passo: dict) -> dict:
 
     todas = colunas_de(con, tabela, internas=True)
     visiveis = [(nome, tipo) for nome, tipo in todas if not eh_interna(nome)]
+    if passo.get("vazia"):
+        _validar_nome(passo.get("nome"), [n for n, _ in visiveis], False)
+        return {"tipo": "texto", "colunas": [], "previa": [], "linhas": 0, "vazios": 0, "sql": "NULL"}
     traducao = traduzir(str(passo.get("formula") or ""), dict(visiveis))
     _validar_nome(passo.get("nome"), [n for n, _ in visiveis], bool(passo.get("substituir")))
     numero = ident(LINHA) if LINHA in dict(todas) else "NULL"

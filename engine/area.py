@@ -111,7 +111,7 @@ def adicionar_arquivo(con: duckdb.DuckDBPyConnection, area: dict, caminho: Path,
 
 def adicionar_tabela_pronta(con: duckdb.DuckDBPyConnection, area: dict, origem_sql: str, nome: str, titulo: str,
                             tipo: str, limites: Limites = LOCAL, definicao: dict | None = None) -> dict:
-    """Uma tabela nova a partir de um SELECT do próprio hub: consulta salva ou arquivos empilhados."""
+    """Uma tabela nova a partir de um SELECT do próprio hub: consulta salva ou arquivos combinados."""
     tabela_id = _proximo_id(area, "t")
     bruta, _, _ = nomes(tabela_id)
     temporaria = f"__nova_{tabela_id}"
@@ -382,6 +382,7 @@ def descrever_base(area: dict) -> dict:
             "derivadas": normalizacao.colunas_derivadas(receita),
             "relatorio": pipeline.relatorio_de(item["relatorio"]) if item.get("relatorio") else None,
             "papeis": item["papeis"],
+            "grao": item.get("grao"),
             "linhas": item["relatorio"]["linhas_depois"] if item.get("relatorio") else 0,
         }
     visao = next(v for v in area["visoes"] if v["id"] == base["id"])
@@ -406,6 +407,7 @@ def descrever_base(area: dict) -> dict:
         "derivadas": vinculadas,
         "relatorio": None,
         "papeis": visao.setdefault("papeis", {}),
+        "grao": visao.get("grao"),
         "linhas": visao.get("linhas", 0),
         "so_media": emprestadas,
     }
@@ -416,7 +418,7 @@ def analisar(con, area: dict, limites: Limites = LOCAL) -> dict:
     base = descrever_base(area)
     estados = {}
     resultado = pipeline.analisar(con, base["nome"], base["unidades"], base["derivadas"], base["relatorio"],
-                                  base["papeis"], limites, estados, base.get("so_media"))
+                                  base["papeis"], limites, estados, base.get("so_media"), base.get("grao"))
     area["analise"] = {
         "base": dict(area["base"]),
         "rotulo": base["rotulo"],
@@ -485,6 +487,19 @@ def remover_grafico_livre(area: dict, id_: str) -> None:
     area["graficos_livres"] = [item for item in area.get("graficos_livres", []) if item["id"] != id_]
     if area.get("analise"):
         area["analise"]["livres"] = [item for item in area["analise"].get("livres", []) if item["id"] != id_]
+
+
+def trocar_grao(area: dict, grao: str | None) -> None:
+    """O que cada linha representa, escolhido pelo usuário; None volta ao detectado."""
+    from engine.grao import TIPOS
+
+    base = area["base"]
+    if not base:
+        raise NaoEncontrado("Escolha uma base de análise.")
+    if grao is not None and grao not in TIPOS:
+        raise PassoInvalido(f"Escolha desconhecida: {grao}.")
+    alvo = tabela(area, base["id"]) if base["tipo"] == "tabela" else next(v for v in area["visoes"] if v["id"] == base["id"])
+    alvo["grao"] = grao
 
 
 def trocar_papeis(area: dict, papeis: dict[str, str]) -> None:

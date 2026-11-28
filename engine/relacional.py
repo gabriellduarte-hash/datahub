@@ -1,4 +1,4 @@
-"""Várias tabelas como um banco: relações, empilhamento e a visão que junta tudo.
+"""Várias tabelas como um banco: relações, a visão que junta tudo e combinar arquivos.
 
 Uma relação liga uma coluna de uma tabela à coluna-chave de outra:
 `pedidos.cliente_id → clientes.cliente_id`. O lado da seta precisa ter a chave
@@ -14,8 +14,9 @@ relações. A regra que protege a análise:
   recusado. No lugar, o hub traz um resumo: quantas linhas e a soma de cada
   número, por chave.
 
-Empilhar é diferente: tabelas com as mesmas colunas (vendas de janeiro e de
-fevereiro) viram uma só, com uma coluna dizendo de onde veio cada linha.
+Combinar arquivos é diferente: tabelas com as mesmas colunas (vendas de janeiro
+e de fevereiro) viram uma só, uma embaixo da outra, com uma coluna dizendo de
+onde veio cada linha.
 """
 
 from engine.manipulacao import eh_numerico
@@ -251,29 +252,102 @@ def criar_sql_da_visao(con, area: dict, visao: dict) -> None:
     visao["sql"] = sql
 
 
-def empilhar(con, area: dict, tabela_ids: list[str], nome: str) -> dict:
-    """Junta tabelas com as mesmas colunas, uma embaixo da outra, numa tabela nova."""
+def _alinhar_nomes(con, itens: list[dict]) -> tuple[list[dict[str, str]], dict[str, set[str]]]:
+    """Para cada tabela, nome original -> nome na tabela combinada.
+
+    Colunas com o mesmo nome simples ("Valor Total" e "valor_total") viram uma
+    só, com o nome que aparece primeiro, como na comparação de arquivos.
+    Devolve também quais nomes foram juntados em cada coluna, para o aviso.
+    """
+    canonicos: dict[str, str] = {}
+    mapas, juntadas = [], {}
+    for item in itens:
+        mapa, usadas = {}, set()
+        for coluna in _tipos(con, item["nome"]):
+            chave = nome_simples(coluna) or coluna.lower()
+            if chave in usadas:  # duas colunas da mesma tabela com o mesmo nome simples: cada uma fica com o seu
+                mapa[coluna] = coluna
+                continue
+            usadas.add(chave)
+            nome = canonicos.setdefault(chave, coluna)
+            mapa[coluna] = nome
+            if nome.lower() != coluna.lower():  # só maiúsculas o banco já junta sozinho
+                juntadas.setdefault(nome, set()).add(coluna)
+        mapas.append(mapa)
+    return mapas, juntadas
+
+
+def _selecao(mapa: dict[str, str]) -> str:
+    return ", ".join(ident(coluna) if nome == coluna else f"{ident(coluna)} AS {ident(nome)}" for coluna, nome in mapa.items())
+
+
+def combinar(con, area: dict, tabela_ids: list[str], nome: str, sem_duplicatas: bool = False) -> dict:
+    """Junta tabelas com as mesmas colunas, uma embaixo da outra, numa tabela nova.
+
+    Colunas com o mesmo nome simples viram uma só. `sem_duplicatas` deixa só a
+    primeira aparição de cada linha, com o mesmo critério da comparação de
+    arquivos: as colunas que todas têm, sem ligar para maiúsculas e espaços nas
+    pontas. A versão de cada arquivo fica guardada, para a tela saber se
+    combinar de novo mudaria alguma coisa.
+    """
     from engine.area import adicionar_tabela_pronta
 
     if len(set(tabela_ids)) < 2:
-        raise JuncaoRecusada("Escolha ao menos duas tabelas para empilhar.")
+        raise JuncaoRecusada("Escolha ao menos duas tabelas para combinar.")
     itens = [_tabela(area, tabela_id) for tabela_id in tabela_ids]
-    colunas = [set(_tipos(con, item["nome"])) for item in itens]
-    comuns = set.intersection(*colunas)
+    mapas, juntadas = _alinhar_nomes(con, itens)
+    colunas = [set(mapa.values()) for mapa in mapas]
+    # O banco não liga para maiúsculas no nome: "Pedido" e "pedido" viram uma coluna só ao combinar.
+    comuns = set.intersection(*({c.lower() for c in grupo} for grupo in colunas))
     if not comuns:
         raise JuncaoRecusada("As tabelas não têm nenhuma coluna em comum.")
-    origem = "origem" if not any("origem" in c for c in colunas) else "tabela_de_origem"
-    partes = [f"SELECT {literal(item['nome'])} AS {ident(origem)}, * FROM {ident(item['nome'])}" for item in itens]
+    origem = "origem" if not any("origem" in {n.lower() for n in c} for c in colunas) else "tabela_de_origem"
+    partes = [f"SELECT {literal(item['nome'])} AS {ident(origem)}, {_selecao(mapa)} FROM {ident(item['nome'])}"
+              for item, mapa in zip(itens, mapas)]
     sql = " UNION ALL BY NAME ".join(partes)
-    titulo = "Empilhada: " + " + ".join(item["nome"] for item in itens)
-    nova = adicionar_tabela_pronta(con, area, sql, nome or "empilhada", titulo, "empilhada",
-                                   definicao={"tabelas": tabela_ids})
-    faltando = sorted(set.union(*colunas) - comuns)
+    removidas, criterio = 0, []
+    if sem_duplicatas:
+        sql, removidas, criterio = _sem_duplicatas(con, itens, mapas, colunas, origem)
+    titulo = "Combinada: " + " + ".join(item["nome"] for item in itens)
+    definicao = {"tabelas": tabela_ids, "sem_duplicatas": sem_duplicatas,
+                 "versoes": {item["id"]: item["versao"] for item in itens}}
+    nova = adicionar_tabela_pronta(con, area, sql, nome or "combinada", titulo, "combinada", definicao=definicao)
+    avisos = nova["arquivo"]["avisos"]
+    if juntadas:
+        avisos.append("Viraram uma coluna só, como na comparação: "
+                      + "; ".join(f"{', '.join(sorted(outros))} em {nome}" for nome, outros in juntadas.items()) + ".")
+    if sem_duplicatas:
+        texto = "1 duplicata removida" if removidas == 1 else f"{removidas} duplicatas removidas"
+        avisos.append(f"{texto} (comparando {', '.join(criterio)}, sem ligar para maiúsculas e espaços nas pontas).")
+    faltando = sorted({c.lower(): c for grupo in colunas for c in grupo if c.lower() not in comuns}.values(), key=str.lower)
     if faltando:
-        nova["arquivo"]["avisos"].append(
-            "Colunas que só existem em parte das tabelas ficaram vazias nas outras: " + ", ".join(faltando) + "."
-        )
+        avisos.append("Colunas que só existem em parte das tabelas ficaram vazias nas outras: " + ", ".join(faltando) + ".")
     return nova
+
+
+def _sem_duplicatas(con, itens: list[dict], mapas: list[dict[str, str]], colunas: list[set],
+                    origem: str) -> tuple[str, int, list[str]]:
+    from engine.comparacao import _chave_da_linha, _detectados, _normalizada
+
+    partes = [f"SELECT {i} AS __ordem, row_number() OVER () AS __pos, {literal(item['nome'])} AS {ident(origem)}, "
+              f"{_selecao(mapa)} FROM {ident(item['nome'])}" for i, (item, mapa) in enumerate(zip(itens, mapas))]
+    uniao = " UNION ALL BY NAME ".join(partes)
+    # o nome das colunas no banco não liga para maiúsculas: "Cidade" e "cidade" viram uma coluna só
+    comuns = set.intersection(*({c.lower() for c in grupo} for grupo in colunas))
+    tipos = [(linha[0], linha[1]) for linha in con.execute(f"DESCRIBE {uniao}").fetchall()]
+    detectados = [{mapa[nome].lower(): grupo for nome, grupo in _detectados(con, item, item["nome"], _tipos(con, item["nome"])).items()
+                   if nome in mapa} for item, mapa in zip(itens, mapas)]
+    # como na comparação: coluna com tipo diferente entre os arquivos fica fora da conta
+    criterio = [nome for nome, _ in tipos if nome.lower() in comuns
+                and len({d.get(nome.lower()) for d in detectados}) == 1] or [nome for nome, _ in tipos if nome.lower() in comuns]
+    chave = _chave_da_linha([
+        _normalizada(nome, _familia(tipo), _familia(tipo), all(d.get(nome.lower()) == "numero" for d in detectados))
+        for nome, tipo in tipos if nome in criterio])
+    sql = (f"SELECT * EXCLUDE (__ordem, __pos) FROM ({uniao}) "
+           f"QUALIFY row_number() OVER (PARTITION BY {chave} ORDER BY __ordem, __pos) = 1 ORDER BY __ordem, __pos")
+    total = con.execute(f"SELECT count(*) FROM ({uniao})").fetchone()[0]
+    ficam = con.execute(f"SELECT count(*) FROM ({sql})").fetchone()[0]
+    return sql, total - ficam, criterio
 
 
 def esquema(con, area: dict) -> dict:

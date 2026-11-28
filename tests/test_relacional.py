@@ -174,7 +174,7 @@ def test_visao_acompanha_edicoes_nas_tabelas(loja):
     assert con.execute(f'SELECT count(*) FROM "{visao["nome"]}" WHERE clientes_regiao = \'Centro\'').fetchone()[0] == 3
 
 
-def test_empilhar_tabelas_parecidas(tmp_path):
+def test_combinar_tabelas_parecidas(tmp_path):
     con = duckdb.connect()
     area = areas.nova("teste")
     for mes, linhas in (("janeiro", 3), ("fevereiro", 4)):
@@ -183,7 +183,7 @@ def test_empilhar_tabelas_parecidas(tmp_path):
         corpo = "".join(f"{i};{i * 10}{';X' if extra else ''}\n" for i in range(linhas))
         caminho.write_text(f"produto;valor{extra}\n{corpo}", encoding="utf-8")
         areas.adicionar_arquivo(con, area, caminho, caminho.name)
-    nova = relacional.empilhar(con, area, [t["id"] for t in area["tabelas"]], "vendas")
+    nova = relacional.combinar(con, area, [t["id"] for t in area["tabelas"]], "vendas")
     assert nova["arquivo"]["linhas"] == 7
     origens = dict(con.execute(f'SELECT origem, count(*) FROM "{nova["nome"]}" GROUP BY 1').fetchall())
     assert origens == {"vendas_janeiro": 3, "vendas_fevereiro": 4}

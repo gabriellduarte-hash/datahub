@@ -60,3 +60,16 @@ def test_grafico_sem_sentido_nao_e_guardado(sessao, pedido, erro):
     cliente, estado = sessao
     resposta = cliente.post(f"/api/sessoes/{estado['sessao']}/graficos-livres", json=pedido)
     assert resposta.status_code == 422 and erro in resposta.json()["erro"]
+
+
+def test_trocar_o_que_cada_linha_representa_e_voltar_ao_detectado(sessao):
+    cliente, estado = sessao
+    assert estado["analise"]["grao"]["tipo"] == "evento", "vendas: cada linha é um pedido"
+    rota = f"/api/sessoes/{estado['sessao']}/grao"
+    trocado = cliente.post(rota, json={"grao": "entidade"}).json()
+    assert trocado["analise"]["grao"]["tipo"] == "entidade" and trocado["analise"]["grao"]["escolhido"]
+    metricas = [c for c in trocado["analise"]["perfil_limpo"]["colunas"] if c["papel"] == "metrica"]
+    assert all(c["agregacao"] != "soma" for c in metricas)
+    de_volta = cliente.post(rota, json={"grao": None}).json()
+    assert de_volta["analise"]["grao"] == {**de_volta["analise"]["grao"], "tipo": "evento", "escolhido": False}
+    assert cliente.post(rota, json={"grao": "nada"}).status_code == 422

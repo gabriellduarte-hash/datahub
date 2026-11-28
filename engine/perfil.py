@@ -49,7 +49,7 @@ NOME_QUANTIDADE = re.compile(r"qtd|qtde|quant|total|valor|vlr|soma|count|amount"
 NOME_NAO_SOMAVEL = re.compile(
     r"unit|preco|price|taxa|rate|ratio|percent|rating|"
     r"(^|_)(pct|perc)(_|$)|"
-    r"(^|_)(media|avg|mean|idade|age|nota|score|temperatura|temperature|temp|saldo|balance|"
+    r"(^|_)(media|avg|mean|idade|age|nota(?!_fiscal)|score|temperatura|temperature|temp|saldo|balance|"
     r"indice|index|cotacao|latitude|longitude|lat|lon|lng)(_|$)"
 )
 # Escalas de nota (1 a 5, 0 a 10) são medidas, mesmo com poucos valores distintos.

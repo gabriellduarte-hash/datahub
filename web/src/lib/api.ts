@@ -1,6 +1,6 @@
 import { NO_NAVEGADOR, pedirAoMotor, type RespostaMotor } from "./motor";
 import type {
-  Area, Base, Contagem, Esquema, Filtro, Grafico, PaginaLinhas, Papel, Passo, PedidoGrafico, PreviaFormula, PontaRelacao, ResultadoSql, Saude,
+  Area, Base, Comparacao, Contagem, Esquema, Filtro, Grafico, PaginaLinhas, Papel, Passo, PedidoGrafico, PreviaFormula, PontaRelacao, ResultadoCopia, ResultadoSql, Saude, TipoGrao,
 } from "./tipos";
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -157,6 +157,7 @@ export const calcularGrafico = (sessao: string, pedido: Partial<Grafico>) => env
 export const criarGraficoLivre = (sessao: string, pedido: PedidoGrafico) => enviarJson<Area>(`${s(sessao)}/graficos-livres`, pedido);
 export const trocarGraficoLivre = (sessao: string, id: string, pedido: PedidoGrafico) =>
   enviarJson<Area>(`${s(sessao)}/graficos-livres/${id}`, pedido, "PUT");
+export const trocarGrao = (sessao: string, grao: TipoGrao | null) => enviarJson<Area>(`${s(sessao)}/grao`, { grao });
 export const removerGraficoLivre = (sessao: string, id: string) => pedir<Area>(`${s(sessao)}/graficos-livres/${id}`, { method: "DELETE" });
 
 // SQL
@@ -177,8 +178,13 @@ export const apagarRelacao = (sessao: string, id: string) => pedir<Area>(`${s(se
 export const criarVisao = (sessao: string, nome: string, tabela: string, juncoes: { relacao: string; modo: string }[]) =>
   enviarJson<Area>(`${s(sessao)}/visoes`, { nome, tabela, juncoes });
 export const apagarVisao = (sessao: string, id: string) => pedir<Area>(`${s(sessao)}/visoes/${id}`, { method: "DELETE" });
-export const empilhar = (sessao: string, tabelas: string[], nome: string) =>
-  enviarJson<Area>(`${s(sessao)}/empilhar`, { tabelas, nome });
+export const combinar = (sessao: string, tabelas: string[], nome: string, semDuplicatas = false) =>
+  enviarJson<Area>(`${s(sessao)}/combinar`, { tabelas, nome, sem_duplicatas: semDuplicatas });
+
+// Comparar arquivos
+export const comparar = (sessao: string) => pedir<Comparacao>(`${s(sessao)}/comparacao`);
+export const copiarReceita = (sessao: string, destino: string, origem: string) =>
+  enviarJson<Area & { copia: ResultadoCopia }>(`${t(sessao, destino)}/copiar-receita`, { origem });
 
 export const caminhoExportacao = (sessao: string, tabela: string, formato: string) =>
   `${t(sessao, tabela)}/exportar/${formato}`;

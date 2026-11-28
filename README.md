@@ -46,7 +46,7 @@ Sem arquivo à mão? Clique em **Usar vendas de exemplo**: 5 mil pedidos com suj
 |---|---|
 | ![A receita de limpeza passo a passo](docs/imagens/normalizacao.png) | ![O painel no tema claro](docs/imagens/painel-claro.png) |
 
-Uma sessão pode ter várias tabelas: arquivos, abas do Excel, consultas salvas e arquivos empilhados. As cotações são do Banco Central Europeu e ficam em `engine/dados/`.
+Uma sessão pode ter várias tabelas: arquivos, abas do Excel, consultas salvas e arquivos combinados. As cotações são do Banco Central Europeu e ficam em `engine/dados/`.
 
 ## Blocos da engine
 
@@ -62,7 +62,7 @@ Uma sessão pode ter várias tabelas: arquivos, abas do Excel, consultas salvas 
 Outros módulos:
 
 - `engine/area.py`: a sessão com várias tabelas e a base de análise.
-- `engine/relacional.py`: relações, a visão que junta tabelas e o empilhamento.
+- `engine/relacional.py`: relações, a visão que junta tabelas e combinar arquivos.
 - `engine/consulta.py`: a vista SQL, só de consulta.
 - `engine/cambio.py`: as cotações para a fórmula `CONVERTER`.
 - `engine/pipeline.py`: liga os blocos.

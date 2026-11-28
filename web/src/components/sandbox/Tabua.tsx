@@ -7,10 +7,11 @@ import { Planilha } from "@/components/sandbox/Planilha";
 import { VistaSql } from "@/components/sandbox/VistaSql";
 import * as api from "@/lib/api";
 import { fmtInteiro } from "@/lib/formato";
-import type { Area, Tabela } from "@/lib/tipos";
+import type { Area, Tabela, TipoGrao } from "@/lib/tipos";
 
 type Vista = "planilha" | "esquema" | "sql";
 const VISTAS: [Vista, string][] = [["planilha", "Planilha"], ["esquema", "Esquema"], ["sql", "SQL"]];
+const GRAOS: [TipoGrao, string][] = [["evento", "um acontecimento"], ["entidade", "uma pessoa ou coisa"], ["foto", "um retrato repetido"]];
 
 type Props = {
   area: Area;
@@ -39,6 +40,12 @@ export function Tabua({ area, tabela, tema, ocupado, aoMudar, executar, aoNormal
       aoMudar(await api.escolherBase(area.sessao, { tipo: tipo as "tabela" | "visao", id }));
     });
   };
+
+  /* Trocar o que cada linha representa muda somar por tirar a média em todo o painel. */
+  const trocarGrao = (valor: string) => executar("Refazendo o painel", async () => {
+    aoMudar(await api.trocarGrao(area.sessao, (valor || null) as TipoGrao | null));
+  });
+  const grao = analise?.grao;
 
   const reanalisar = () => executar("Refazendo o painel", async () => {
     aoMudar(await api.reanalisar(area.sessao));
@@ -81,6 +88,15 @@ export function Tabua({ area, tabela, tema, ocupado, aoMudar, executar, aoNormal
             {opcoesBase.map((o) => <option key={o.valor} value={o.valor}>{o.nome}</option>)}
           </select>
           {analise ? <span className="texto-suave">{fmtInteiro(analise.linhas)} linhas</span> : null}
+          {grao ? (
+            <span className="grao" title={`${grao.motivo}. ${grao.tipo === "evento" ? "Os números são somados." : "Os números usam a média."}`}>
+              <label htmlFor="grao-base">cada linha é</label>
+              <select id="grao-base" value={grao.escolhido ? grao.tipo : ""} disabled={ocupado} onChange={(e) => trocarGrao(e.target.value)}>
+                <option value="">{grao.escolhido ? "detectar sozinho" : `${GRAOS.find(([t]) => t === grao.tipo)?.[1]} (detectado)`}</option>
+                {GRAOS.map(([tipo, nome]) => <option key={tipo} value={tipo}>{nome}</option>)}
+              </select>
+            </span>
+          ) : null}
           {analise ? <span className={`marca${analise.desatualizada ? " tracejada" : " ok"}`}>{analise.desatualizada ? "desatualizado" : "em dia"}</span> : null}
           <button type="button" className="botao pequeno" disabled={ocupado || !area.base} onClick={reanalisar}>Reanalisar</button>
         </div>

@@ -118,6 +118,8 @@ def compilar(passo: dict, colunas: list[tuple[str, str]], origem: str) -> str:
         return f"SELECT * FROM {origem} WHERE coalesce(({condicoes}), false)"
     if op == "renomear_coluna":
         return _renomear(passo, colunas, origem)
+    if op == "mover_coluna":
+        return _mover(passo, colunas, origem)
     if op == "agrupar":
         return _agrupar(passo, colunas, origem)
     raise PassoInvalido(f"Passo desconhecido: {op}")
@@ -173,6 +175,28 @@ def _renomear(passo: dict, colunas: list[tuple[str, str]], origem: str) -> str:
         raise PassoInvalido(f"Já existe uma coluna chamada {repetida}.")
     lista = ", ".join(f"{ident(nome)} AS {ident(novo)}" if nome == antigo else ident(nome) for nome in nomes)
     return f"SELECT {lista} FROM {origem}"
+
+
+def _mover(passo: dict, colunas: list[tuple[str, str]], origem: str) -> str:
+    """Muda a coluna de lugar: logo depois (`apos`) ou logo antes (`antes`) de outra.
+
+    A referência é outra coluna, não uma posição: o passo continua certo se uma
+    coluna for criada ou apagada antes dele, e serve para outro arquivo.
+    """
+    nomes = [nome for nome, _ in colunas]
+    coluna, apos, antes = passo.get("coluna"), passo.get("apos"), passo.get("antes")
+    if coluna not in nomes or eh_interna(coluna):
+        raise PassoInvalido(f"A coluna {coluna} não existe.")
+    if bool(apos) == bool(antes):
+        raise PassoInvalido("Diga para onde a coluna vai: depois ou antes de outra.")
+    alvo = apos or antes
+    if alvo == coluna:
+        raise PassoInvalido("A coluna não pode ir para antes ou depois dela mesma.")
+    if alvo not in nomes or eh_interna(alvo):
+        raise PassoInvalido(f"A coluna {alvo} não existe.")
+    lista = [nome for nome in nomes if nome != coluna]
+    lista.insert(lista.index(alvo) + (1 if apos else 0), coluna)
+    return f"SELECT {', '.join(ident(nome) for nome in lista)} FROM {origem}"
 
 
 FUNCOES_AGRUPAR = {"soma": "sum", "media": "avg", "minimo": "min", "maximo": "max"}
@@ -240,6 +264,9 @@ def descrever(passo: dict) -> str:
         return f"{verbo} {descrever_filtros(passo.get('filtros') or [])}"
     if op == "renomear_coluna":
         return f"Renomear {passo.get('coluna')} para {passo.get('nome')}"
+    if op == "mover_coluna":
+        lugar = f"depois de {passo['apos']}" if passo.get("apos") else f"antes de {passo.get('antes')}"
+        return f"Mover {passo.get('coluna')} para {lugar}"
     return str(op)
 
 
